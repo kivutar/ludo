@@ -34,7 +34,6 @@ var Conn *net.UDPConn
 
 var enabled = false
 var connectedToClient = false
-var isServer = false
 var confirmedTick = int64(0)
 var localSyncData = uint32(0)
 var remoteSyncData = uint32(0)
@@ -52,77 +51,24 @@ var messages chan []byte
 
 // Init initialises a netplay session between two players
 func Init() {
+	Conn, clientAddr = punch()
+
+	enabled = true
+	connectedToClient = true
+
+	input.InitializeBuffer(0)
+	input.InitializeBuffer(1)
+
 	if Listen { // Host mode
-		var err error
-		Conn, err = net.ListenUDP("udp", &net.UDPAddr{
-			IP:   net.ParseIP("0.0.0.0"),
-			Port: 1234,
-		})
-		if err != nil {
-			log.Println("Netplay", err.Error())
-			return
-		}
-
-		Conn.SetReadBuffer(1048576)
-
-		enabled = true
-		isServer = true
-
-		input.InitializeBuffer(0)
-		input.InitializeBuffer(1)
 		input.LocalPlayerPort = 0
 		input.RemotePlayerPort = 1
-
-		log.Println("Netplay", "Listening.")
-
-		buffer := make([]byte, 1024)
-		_, addr, _ := Conn.ReadFrom(buffer)
-
-		connectedToClient = true
-		clientAddr = addr
-
-		sendPacket(makeHandshakePacket(), 5)
-
-		messages = make(chan []byte, 256)
-		go listen()
-	} else if Join { // Guest mode
-		var err error
-		Conn, err = net.ListenUDP("udp", &net.UDPAddr{
-			IP:   net.ParseIP("0.0.0.0"),
-			Port: 1235,
-		})
-		if err != nil {
-			log.Println("Netplay", err.Error())
-			return
-		}
-
-		clientAddr = &net.UDPAddr{
-			IP:   net.ParseIP("127.0.0.1"),
-			Port: 1234,
-		}
-
-		Conn.SetReadBuffer(1048576)
-
-		enabled = true
-		isServer = false
-
-		input.InitializeBuffer(0)
-		input.InitializeBuffer(1)
+	} else {
 		input.LocalPlayerPort = 1
 		input.RemotePlayerPort = 0
-
-		log.Println("sending handshake")
-		sendPacket(makeHandshakePacket(), 5)
-
-		buffer := make([]byte, 1024)
-		_, addr, _ := Conn.ReadFrom(buffer)
-
-		connectedToClient = true
-		clientAddr = addr
-
-		messages = make(chan []byte, 256)
-		go listen()
 	}
+
+	messages = make(chan []byte, 256)
+	go listen()
 }
 
 // Get input from the remote player for the passed in game tick.
