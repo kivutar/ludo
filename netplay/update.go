@@ -12,11 +12,11 @@ var tickSyncing = false
 var tickOffset = float64(0)
 var lastConfirmedTick int64
 var syncedLastUpdate = false
+var shouldUpdate = false
 
 // Update processes a frame of the netplay, taking care of polling inputs and executing the game
-func Update(inputPoll, gameUpdate func()) {
+func Update(gameUpdate func()) {
 	lastGameTick := state.Global.Tick
-	shouldUpdate := false
 
 	if rollbackTestEnabled {
 		shouldUpdate = true
@@ -32,7 +32,7 @@ func Update(inputPoll, gameUpdate func()) {
 
 		if connectedToClient {
 			// First we assume that the game can be updated, sync checks below can halt updates
-			shouldUpdate = true
+			// shouldUpdate = true
 
 			if state.Global.ForcePause {
 				shouldUpdate = false
@@ -84,15 +84,15 @@ func Update(inputPoll, gameUpdate func()) {
 			}
 
 			// Only halt the game update based on exceeding the rollback window when the game updated hasn't previously been stopped by time sync code
-			if shouldUpdate {
-				// We allow the game to run for rollbackMaxFrames updates without having input for the current frame.
-				// Once the game can no longer update, it will wait until the other player's client can catch up.
-				if lastGameTick <= (confirmedTick + rollbackMaxFrames) {
-					shouldUpdate = true
-				} else {
-					shouldUpdate = false
-				}
-			}
+			// if shouldUpdate {
+			// 	// We allow the game to run for rollbackMaxFrames updates without having input for the current frame.
+			// 	// Once the game can no longer update, it will wait until the other player's client can catch up.
+			// 	if lastGameTick <= (confirmedTick + rollbackMaxFrames) {
+			// 		shouldUpdate = true
+			// 	} else {
+			// 		shouldUpdate = false
+			// 	}
+			// }
 		}
 	}
 
@@ -114,7 +114,9 @@ func Update(inputPoll, gameUpdate func()) {
 
 			// Set the input state fo[r the current tick for the remote player's character.
 			input.SetState(input.LocalPlayerPort, getLocalInputState(lastGameTick))
-			input.SetState(input.RemotePlayerPort, getRemoteInputState(lastGameTick))
+			if connectedToClient {
+				input.SetState(input.RemotePlayerPort, getRemoteInputState(lastGameTick))
+			}
 		}
 
 		// Increment the tick count only when the game actually updates.

@@ -6,21 +6,33 @@ import (
 	"log"
 	"net"
 	"time"
+	// "hash/crc32"
 
 	"github.com/libretro/ludo/input"
+	"github.com/libretro/ludo/state"
 )
+
+type SavestatePacket struct {
+	total uint32
+	index uint32
+	tick  int64
+	save []byte
+}
 
 const inputDelayFrames = 3
 const inputHistorySize = int64(300)
 const sendHistorySize = 5
+const packetSizeLimit = 60 * 1024 //60 kB
 
 // Network code indicating the type of message.
 const (
-	MsgCodeHandshake   = byte(1) // Used when sending the hand shake.
-	MsgCodePlayerInput = byte(2) // Sends part of the player's input buffer.
-	MsgCodePing        = byte(3) // Used to tracking packet round trip time. Expect a "Pong" back.
-	MsgCodePong        = byte(4) // Sent in reply to a Ping message for testing round trip time.
-	MsgCodeSync        = byte(5) // Used to pass sync data
+	MsgCodeHandshake    = byte(1) // Used when sending the hand shake.
+	MsgCodePlayerInput  = byte(2) // Sends part of the player's input buffer.
+	MsgCodePing         = byte(3) // Used to tracking packet round trip time. Expect a "Pong" back.
+	MsgCodePong         = byte(4) // Sent in reply to a Ping message for testing round trip time.
+	MsgCodeSync         = byte(5) // Used to pass sync data
+	MsgCodeSavestate    = byte(6) // Used to load a savestate when a new player arrives
+	MsgCodeSavestateReq = byte(7) // Used to request a savestate
 )
 
 // Listen is used by the netplay host, listening address and port
@@ -49,6 +61,8 @@ var clientAddr net.Addr
 var latency int64
 var lastSyncedTick = int64(-1)
 var messages chan []byte
+var remoteSavestate []SavestatePacket
+var lastTimeSaveRecv = int64(0)
 
 // Init initialises a netplay session between two players
 func Init() {
@@ -74,17 +88,21 @@ func Init() {
 		input.RemotePlayerPort = 1
 
 		log.Println("Netplay", "Listening.")
+		go func() {
+			buffer := make([]byte, packetSizeLimit)
+			_, addr, _ := Conn.ReadFrom(buffer)
+	
+			connectedToClient = true
+			clientAddr = addr
 
-		buffer := make([]byte, 1024)
-		_, addr, _ := Conn.ReadFrom(buffer)
-
-		connectedToClient = true
-		clientAddr = addr
-
-		sendPacket(makeHandshakePacket(), 5)
-
-		messages = make(chan []byte, 256)
+			log.Println("Netplay", "A new peer has arrived")
+	
+			sendPacket(makeHandshakePacket(), 5)
+	
+			messages = make(chan []byte, 256)
+		}()
 		go listen()
+		shouldUpdate = true
 	} else if Join { // Guest mode
 		var err error
 		Conn, err = net.ListenUDP("udp", &net.UDPAddr{
@@ -113,12 +131,15 @@ func Init() {
 
 		log.Println("sending handshake")
 		sendPacket(makeHandshakePacket(), 5)
+		sendPacket(makeSavestateReqPackets(), 1)
+		lastTimeSaveRecv = currentTimestamp()
 
-		buffer := make([]byte, 1024)
+		buffer := make([]byte, packetSizeLimit)
 		_, addr, _ := Conn.ReadFrom(buffer)
 
 		connectedToClient = true
 		clientAddr = addr
+		log.Println("Netplay", "Connected")
 
 		messages = make(chan []byte, 256)
 		go listen()
@@ -130,7 +151,8 @@ func getRemoteInputState(tick int64) input.PlayerState {
 	if tick > confirmedTick {
 		// Repeat the last confirmed input when we don't have a confirmed tick
 		tick = confirmedTick
-		log.Println("Predict:", confirmedTick, remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
+		// TODO: uncomment
+		// log.Println("Predict:", confirmedTick, remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
 	}
 	return decodeInput(remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
 }
@@ -182,7 +204,7 @@ func sendPacketRaw(packet []byte) {
 
 func listen() {
 	for {
-		buffer := make([]byte, 1024)
+		buffer := make([]byte, packetSizeLimit)
 		n, err := Conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
@@ -190,6 +212,7 @@ func listen() {
 		}
 		messages <- buffer[:n]
 	}
+	//TODO: handle when a player leaves the game
 }
 
 // Checks the queue for any incoming packets and process them.
@@ -205,6 +228,14 @@ func receiveData() {
 			r := bytes.NewReader(data)
 			var code byte
 			binary.Read(r, binary.LittleEndian, &code)
+
+			// We ask for the savestate every 500ms if we didn't receive it correctly
+			if code != MsgCodeSavestate && lastTimeSaveRecv != 0 && currentTimestamp() - lastTimeSaveRecv >= 500 {
+				log.Println("Netplay", "Didn't receive the savestate: requesting...")
+				sendPacket(makeSavestateReqPackets(), 1)
+				lastTimeSaveRecv = currentTimestamp()
+				remoteSavestate = nil				
+			}
 
 			if code == MsgCodePlayerInput {
 				// Break apart the packet into its parts.
@@ -259,6 +290,37 @@ func receiveData() {
 					// Check for a desync
 					isDesynced()
 				}
+			} else if code == MsgCodeSavestate {
+				var savePacket SavestatePacket
+				binary.Read(r, binary.LittleEndian, &savePacket.total)
+				binary.Read(r, binary.LittleEndian, &savePacket.index)
+				binary.Read(r, binary.LittleEndian, &savePacket.tick)
+				savePacket.save = data[17:] // TODO: find a better way
+				remoteSavestate = append(remoteSavestate, savePacket)
+				lastTimeSaveRecv = currentTimestamp()
+
+				if len(remoteSavestate) == int(savePacket.total) {
+					savestate, tick := joinSave(remoteSavestate)
+					binary.Read(r, binary.LittleEndian, savestate)
+					s := state.Global.Core.SerializeSize()
+					err := state.Global.Core.Unserialize(savestate, s)
+					if err != nil {
+						log.Println(err)
+					} else {
+						shouldUpdate = true
+						state.Global.Tick = tick
+						localSyncDataTick = tick
+						remoteSyncDataTick = tick
+						confirmedTick = tick
+						lastSyncedTick = tick
+					}
+					remoteSavestate = nil
+					lastTimeSaveRecv = 0
+				}
+			} else if code == MsgCodeSavestateReq {
+				log.Println("Netplay", "Recv savestate request")
+				// We send the savestate if we receive a request
+				sendSavestate()
 			}
 		default:
 			return
@@ -282,6 +344,18 @@ func makeInputPacket(tick int64) []byte {
 	}
 
 	return buf.Bytes()
+}
+
+// Make and send the savestate message
+func sendSavestate() {
+	savestatePackets := makeSavestatePackets()
+	localSyncDataTick = state.Global.Tick
+	remoteSyncDataTick = state.Global.Tick
+	confirmedTick = state.Global.Tick
+	lastSyncedTick = state.Global.Tick
+	for i := 0; i < len(savestatePackets); i++ {
+		sendPacket(savestatePackets[i], 1)
+	}
 }
 
 // Send a ping message in order to test network latency
@@ -326,6 +400,34 @@ func makeHandshakePacket() []byte {
 	return buf.Bytes()
 }
 
+// Make the savestate packets
+func makeSavestatePackets() [][]byte {
+	s := state.Global.Core.SerializeSize()
+	savestate, err := state.Global.Core.Serialize(s)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	saves := split(savestate, packetSizeLimit - 17)
+	var buffers [][]byte
+	for i := 0; i < len(saves); i++ {
+		buf := new(bytes.Buffer)
+		binary.Write(buf, binary.LittleEndian, MsgCodeSavestate)
+		binary.Write(buf, binary.LittleEndian, uint32(len(saves))) // total packets
+		binary.Write(buf, binary.LittleEndian, uint32(i+1)) // index
+		binary.Write(buf, binary.LittleEndian, int64(state.Global.Tick - 1 + inputDelayFrames)) // tick
+		buffer := append(buf.Bytes(), saves[i]...)
+		buffers = append(buffers, buffer)
+	}
+	return buffers
+}
+
+func makeSavestateReqPackets() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeSavestateReq)
+	return buf.Bytes()
+}
+
 // Encodes the player input state into a compact form for network transmission.
 func encodeInput(st input.PlayerState) uint32 {
 	var out uint32
@@ -344,4 +446,43 @@ func decodeInput(in uint32) input.PlayerState {
 		st[i] = in&(1<<i) > 0
 	}
 	return st
+}
+
+// Splits a slice into multiple slices
+func split(buf []byte, lim int) [][]byte {
+	var chunk []byte
+	chunks := make([][]byte, 0, len(buf)/lim+1)
+	for len(buf) >= lim {
+		chunk, buf = buf[:lim], buf[lim:]
+		chunks = append(chunks, chunk)
+	}
+	if len(buf) > 0 {
+		chunks = append(chunks, buf[:len(buf)])
+	}
+	return chunks
+}
+
+// Joins savestate packets and returns the tick
+func joinSave(chunks []SavestatePacket) ([]byte, int64) {
+	var result []byte
+	currentIndex := 1
+	tick := int64(0)
+	for i := 0; len(chunks) > 0; i++ {
+		savePacket := chunks[i]
+		index := int(savePacket.index)
+		tick = savePacket.tick
+		if index == currentIndex {
+			packet := savePacket.save
+			result = append(result, packet...)
+			chunks[i] = chunks[len(chunks)-1]
+			chunks = chunks[:len(chunks)-1]
+			i = -1
+			currentIndex++
+		}
+	}
+	return result, tick
+}
+
+func currentTimestamp() int64 {
+    return time.Now().UnixNano() / int64(time.Millisecond)
 }

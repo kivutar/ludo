@@ -35,7 +35,7 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 
 		state.Global.ForcePause = vid.Window.GetKey(glfw.KeySpace) == glfw.Press
 
-		netplay.Update(input.Poll, gameUpdate)
+		netplay.Update(gameUpdate)
 
 		vid.Render()
 		if state.Global.FastForward {
