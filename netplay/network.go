@@ -309,8 +309,8 @@ func receiveData() {
 					} else {
 						shouldUpdate = true
 						state.Global.Tick = tick
-						// localSyncDataTick = tick
-						// remoteSyncDataTick = tick
+						localSyncDataTick = tick
+						remoteSyncDataTick = tick
 						confirmedTick = tick
 						lastSyncedTick = tick
 					}
@@ -349,8 +349,8 @@ func makeInputPacket(tick int64) []byte {
 // Make and send the savestate message
 func sendSavestate() {
 	savestatePackets := makeSavestatePackets()
-	// localSyncDataTick = state.Global.Tick
-	// remoteSyncDataTick = state.Global.Tick
+	localSyncDataTick = state.Global.Tick
+	remoteSyncDataTick = state.Global.Tick
 	confirmedTick = state.Global.Tick
 	lastSyncedTick = state.Global.Tick
 	for i := 0; i < len(savestatePackets); i++ {
