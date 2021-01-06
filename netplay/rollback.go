@@ -43,6 +43,13 @@ func unserialize() {
 	state.Global.Tick = saved.Tick
 }
 
+func min(a, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // handleRollbacks will rollback if needed.
 func handleRollbacks(gameUpdate func()) {
 	lastGameTick := state.Global.Tick - 1
@@ -57,11 +64,13 @@ func handleRollbacks(gameUpdate func()) {
 
 	log.Println("fufu", rollbackFrames, lastGameTick, lastSyncedTick)
 	wrongPrediction := false
-	for i := int64(0); i < rollbackFrames; i++ {
-		if encodeInput(getRemoteInputState(lastSyncedTick+i+1)) != lastPrediction {
+	for i := lastSyncedTick; i <= min(lastGameTick, confirmedTick); i++ {
+		log.Println(i, encodeInput(getRemoteInputState(i)) != lastPrediction)
+		if encodeInput(getRemoteInputState(i)) != lastPrediction {
 			wrongPrediction = true
 		}
 	}
+	log.Println("---")
 
 	// Update the graph indicating the number of rollback frames
 	// rollbackGraphTable[ 1 + (lastGameTick % 60) * 2 + 1  ] = -1 * rollbackFrames * GRAPH_UNIT_SCALE
@@ -98,7 +107,7 @@ func handleRollbacks(gameUpdate func()) {
 			state.Global.FastForward = false
 		} else {
 			log.Println("Predicted", rollbackFrames, "frames")
-			lastSyncedTick = lastGameTick
+			lastSyncedTick = min(lastGameTick, confirmedTick)
 		}
 	}
 }

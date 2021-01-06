@@ -133,7 +133,7 @@ func getRemoteInputState(tick int64) input.PlayerState {
 		// Repeat the last confirmed input when we don't have a confirmed tick
 		tick = confirmedTick
 		lastPrediction = remoteInputHistory[(inputHistorySize+tick)%inputHistorySize]
-		// log.Println("Predict:", confirmedTick, remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
+		log.Println("Predict:", confirmedTick, remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
 	}
 	return decodeInput(remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
 }
