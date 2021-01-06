@@ -39,7 +39,7 @@ func receiveReply(conn *net.UDPConn) string {
 
 func punch() (*net.UDPConn, net.Addr) {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("95.130.13.198"),
+		IP:   net.ParseIP("195.201.56.250"),
 		Port: 1234,
 	})
 	if err != nil {
