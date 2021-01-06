@@ -62,52 +62,46 @@ func handleRollbacks(gameUpdate func()) {
 	// Rerun rollbackFrames number of updates.
 	rollbackFrames := lastGameTick - lastSyncedTick
 
-	log.Println("fufu", rollbackFrames, lastGameTick, lastSyncedTick)
 	wrongPrediction := false
 	for i := lastSyncedTick; i <= min(lastGameTick, confirmedTick); i++ {
-		log.Println(i, encodeInput(getRemoteInputState(i)) != lastPrediction)
+		//log.Println(i, encodeInput(getRemoteInputState(i)) != lastPrediction)
 		if encodeInput(getRemoteInputState(i)) != lastPrediction {
 			wrongPrediction = true
 		}
 	}
-	log.Println("---")
 
 	// Update the graph indicating the number of rollback frames
 	// rollbackGraphTable[ 1 + (lastGameTick % 60) * 2 + 1  ] = -1 * rollbackFrames * GRAPH_UNIT_SCALE
 
-	if lastGameTick >= 0 && lastGameTick > (lastSyncedTick+1) && confirmedTick > lastSyncedTick {
-		if wrongPrediction {
-			log.Println("Rollback", rollbackFrames, "frames")
-			state.Global.FastForward = true
+	if wrongPrediction && lastGameTick >= 0 && lastGameTick > (lastSyncedTick+1) && confirmedTick > lastSyncedTick {
+		log.Println("Rollback", rollbackFrames, "frames")
+		state.Global.FastForward = true
 
-			// Must revert back to the last known synced game frame.
-			unserialize()
+		// Must revert back to the last known synced game frame.
+		unserialize()
 
-			for i := int64(0); i < rollbackFrames; i++ {
-				// Get input from the input history buffer. The network system will predict input after the last confirmed tick (for the remote player).
-				input.SetState(input.LocalPlayerPort, getLocalInputState(state.Global.Tick)) // Offset of 1 ensure it's used for the next game update.
-				input.SetState(input.RemotePlayerPort, getRemoteInputState(state.Global.Tick))
+		for i := int64(0); i < rollbackFrames; i++ {
+			// Get input from the input history buffer. The network system will predict input after the last confirmed tick (for the remote player).
+			input.SetState(input.LocalPlayerPort, getLocalInputState(state.Global.Tick)) // Offset of 1 ensure it's used for the next game update.
+			input.SetState(input.RemotePlayerPort, getRemoteInputState(state.Global.Tick))
 
-				lastRolledBackGameTick := state.Global.Tick
-				gameUpdate()
-				state.Global.Tick++
+			lastRolledBackGameTick := state.Global.Tick
+			gameUpdate()
+			state.Global.Tick++
 
-				// Confirm that we are indeed still synced
-				if lastRolledBackGameTick <= confirmedTick {
-					log.Println("Save after rollback")
-					serialize()
+			// Confirm that we are indeed still synced
+			if lastRolledBackGameTick <= confirmedTick {
+				log.Println("Save after rollback")
+				serialize()
 
-					lastSyncedTick = lastRolledBackGameTick
+				lastSyncedTick = lastRolledBackGameTick
 
-					// Confirm the game clients are in sync
-					checkSync()
-				}
+				// Confirm the game clients are in sync
+				checkSync()
 			}
-
-			state.Global.FastForward = false
-		} else {
-			log.Println("Predicted", rollbackFrames, "frames")
-			lastSyncedTick = min(lastGameTick, confirmedTick)
 		}
+
+		state.Global.FastForward = false
+
 	}
 }
