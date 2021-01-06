@@ -6,7 +6,7 @@ import (
 	"log"
 	"net"
 	"time"
-	// "hash/crc32"
+	"hash/crc32"
 
 	"github.com/libretro/ludo/input"
 	"github.com/libretro/ludo/state"
@@ -313,6 +313,8 @@ func receiveData() {
 						remoteSyncDataTick = tick
 						confirmedTick = tick
 						lastSyncedTick = tick
+						remoteSyncData = crc32.ChecksumIEEE(savestate)
+						localSyncData = remoteSyncData
 					}
 					remoteSavestate = nil
 					lastTimeSaveRecv = 0
@@ -408,6 +410,8 @@ func makeSavestatePackets() [][]byte {
 		log.Println(err)
 		return nil
 	}
+	remoteSyncData = crc32.ChecksumIEEE(savestate)
+	localSyncData = remoteSyncData
 	saves := split(savestate, packetSizeLimit - 17)
 	var buffers [][]byte
 	for i := 0; i < len(saves); i++ {
@@ -415,7 +419,7 @@ func makeSavestatePackets() [][]byte {
 		binary.Write(buf, binary.LittleEndian, MsgCodeSavestate)
 		binary.Write(buf, binary.LittleEndian, uint32(len(saves))) // total packets
 		binary.Write(buf, binary.LittleEndian, uint32(i+1)) // index
-		binary.Write(buf, binary.LittleEndian, int64(state.Global.Tick + inputDelayFrames)) // tick
+		binary.Write(buf, binary.LittleEndian, int64(state.Global.Tick)) // tick
 		buffer := append(buf.Bytes(), saves[i]...)
 		buffers = append(buffers, buffer)
 	}
