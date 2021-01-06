@@ -309,8 +309,8 @@ func receiveData() {
 					} else {
 						shouldUpdate = true
 						state.Global.Tick = tick
-						localSyncDataTick = tick
-						remoteSyncDataTick = tick
+						// localSyncDataTick = tick
+						// remoteSyncDataTick = tick
 						confirmedTick = tick
 						lastSyncedTick = tick
 					}
@@ -349,8 +349,8 @@ func makeInputPacket(tick int64) []byte {
 // Make and send the savestate message
 func sendSavestate() {
 	savestatePackets := makeSavestatePackets()
-	localSyncDataTick = state.Global.Tick
-	remoteSyncDataTick = state.Global.Tick
+	// localSyncDataTick = state.Global.Tick
+	// remoteSyncDataTick = state.Global.Tick
 	confirmedTick = state.Global.Tick
 	lastSyncedTick = state.Global.Tick
 	for i := 0; i < len(savestatePackets); i++ {
@@ -415,7 +415,7 @@ func makeSavestatePackets() [][]byte {
 		binary.Write(buf, binary.LittleEndian, MsgCodeSavestate)
 		binary.Write(buf, binary.LittleEndian, uint32(len(saves))) // total packets
 		binary.Write(buf, binary.LittleEndian, uint32(i+1)) // index
-		binary.Write(buf, binary.LittleEndian, int64(state.Global.Tick - 1 + inputDelayFrames)) // tick
+		binary.Write(buf, binary.LittleEndian, int64(state.Global.Tick + inputDelayFrames)) // tick
 		buffer := append(buf.Bytes(), saves[i]...)
 		buffers = append(buffers, buffer)
 	}
