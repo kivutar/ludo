@@ -71,11 +71,14 @@ func Init() {
 	go listen()
 }
 
+var lastPrediction uint32
+
 // Get input from the remote player for the passed in game tick.
 func getRemoteInputState(tick int64) input.PlayerState {
 	if tick > confirmedTick {
 		// Repeat the last confirmed input when we don't have a confirmed tick
 		tick = confirmedTick
+		lastPrediction = remoteInputHistory[(inputHistorySize+tick)%inputHistorySize]
 		log.Println("Predict:", confirmedTick, remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
 	}
 	return decodeInput(remoteInputHistory[(inputHistorySize+tick)%inputHistorySize])
