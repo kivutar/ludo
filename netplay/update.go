@@ -131,7 +131,7 @@ func Update(inputPoll, gameUpdate func()) {
 		if enabled {
 			// Check whether or not the game state is confirmed to be in sync.
 			// Since we previously rolled back, it's safe to set the lastSyncedTick here since we know any previous frames will be synced.
-			if lastSyncedTick+1 == lastGameTick && lastGameTick <= confirmedTick {
+			if lastGameTick > (lastSyncedTick+1) && lastGameTick <= confirmedTick {
 				// Increment the synced tick number if we have inputs
 				lastSyncedTick = lastGameTick
 
