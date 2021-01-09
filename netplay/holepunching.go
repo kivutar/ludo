@@ -6,9 +6,14 @@ import (
 	"log"
 	"net"
 	"strconv"
+
+	"github.com/libretro/ludo/input"
 )
 
-const msgHi = byte(1)
+const (
+	msgHi = byte(1)
+	msgIP = byte(2)
+)
 
 func makeHi() []byte {
 	buf := new(bytes.Buffer)
@@ -16,12 +21,11 @@ func makeHi() []byte {
 	return buf.Bytes()
 }
 
-func receiveReply(conn *net.UDPConn) string {
+func receiveReply(conn *net.UDPConn) (uint, string, error) {
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
 	if err != nil {
-		log.Println(err.Error())
-		return ""
+		return 0, "", err
 	}
 	data := buffer[:n]
 
@@ -30,16 +34,21 @@ func receiveReply(conn *net.UDPConn) string {
 	r := bytes.NewReader(data)
 
 	var code byte
+	var playerID byte
 	var addr []byte
 	binary.Read(r, binary.LittleEndian, &code)
-	addr = data[1:]
+	if code == msgIP {
+		binary.Read(r, binary.LittleEndian, &playerID)
+		addr = data[2:]
+		return uint(playerID), string(addr), nil
+	}
 
-	return string(addr)
+	return 0, "", nil
 }
 
 func punch() (*net.UDPConn, net.Addr) {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("95.130.13.198"),
+		IP:   net.ParseIP("195.201.56.250"),
 		Port: 1234,
 	})
 	if err != nil {
@@ -55,8 +64,13 @@ func punch() (*net.UDPConn, net.Addr) {
 		return nil, nil
 	}
 
-	my := receiveReply(rdv)
+	myIdx, my, err := receiveReply(rdv)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, nil
+	}
 	log.Println("I am", my)
+	input.LocalPlayerPort = myIdx
 
 	_, myPortStr, err := net.SplitHostPort(my)
 	if err != nil {
@@ -65,8 +79,13 @@ func punch() (*net.UDPConn, net.Addr) {
 	}
 	myPort, _ := strconv.ParseInt(myPortStr, 10, 64)
 
-	peer := receiveReply(rdv)
+	peerIdx, peer, err := receiveReply(rdv)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, nil
+	}
 	log.Println("I see", peer)
+	input.RemotePlayerPort = peerIdx
 
 	peerIP, peerPortStr, err := net.SplitHostPort(peer)
 	if err != nil {
@@ -101,7 +120,7 @@ func punch() (*net.UDPConn, net.Addr) {
 	}
 
 	for {
-		msg := receiveReply(p2p)
+		_, msg, _ := receiveReply(p2p)
 		log.Println(msg)
 		return p2p, peerAddr
 	}

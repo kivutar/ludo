@@ -59,14 +59,6 @@ func Init() {
 	input.InitializeBuffer(0)
 	input.InitializeBuffer(1)
 
-	if Listen { // Host mode
-		input.LocalPlayerPort = 0
-		input.RemotePlayerPort = 1
-	} else {
-		input.LocalPlayerPort = 1
-		input.RemotePlayerPort = 0
-	}
-
 	messages = make(chan []byte, 256)
 	go listen()
 }
