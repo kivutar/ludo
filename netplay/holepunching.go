@@ -67,7 +67,6 @@ func punch() (*net.UDPConn, net.Addr, error) {
 		return nil, nil, err
 	}
 	log.Println("I am", my)
-	input.LocalPlayerPort = myIdx
 
 	_, myPortStr, err := net.SplitHostPort(my)
 	if err != nil {
@@ -83,7 +82,6 @@ func punch() (*net.UDPConn, net.Addr, error) {
 		return nil, nil, err
 	}
 	log.Println("I see", peer)
-	input.RemotePlayerPort = peerIdx
 
 	peerIP, peerPortStr, err := net.SplitHostPort(peer)
 	if err != nil {
@@ -124,6 +122,8 @@ func punch() (*net.UDPConn, net.Addr, error) {
 	for {
 		_, msg, _ := receiveReply(p2p)
 		log.Println(msg)
+		input.LocalPlayerPort = myIdx
+		input.RemotePlayerPort = peerIdx
 		return p2p, peerAddr, nil
 	}
 }
