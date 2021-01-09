@@ -50,6 +50,9 @@ var inputPoll, gameUpdate func()
 
 // Init initialises a netplay session between two players
 func Init(pollCb, updateCb func()) {
+	inputPoll = pollCb
+	gameUpdate = updateCb
+
 	var err error
 	Conn, clientAddr, err = punch()
 	if err != nil {
