@@ -11,13 +11,13 @@ import (
 )
 
 const (
-	msgHi = byte(1)
-	msgIP = byte(2)
+	msgJoin = byte(1)
+	msgIP   = byte(2)
 )
 
 func makeHi() []byte {
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, msgHi)
+	binary.Write(buf, binary.LittleEndian, msgJoin)
 	return buf.Bytes()
 }
 
@@ -34,12 +34,12 @@ func receiveReply(conn *net.UDPConn) (uint, string, error) {
 	r := bytes.NewReader(data)
 
 	var code byte
-	var playerID byte
-	var addr []byte
+
 	binary.Read(r, binary.LittleEndian, &code)
 	if code == msgIP {
+		var playerID byte
 		binary.Read(r, binary.LittleEndian, &playerID)
-		addr = data[2:]
+		addr := data[2:]
 		return uint(playerID), string(addr), nil
 	}
 
