@@ -15,7 +15,6 @@ import (
 	"github.com/libretro/ludo/audio"
 	"github.com/libretro/ludo/input"
 	"github.com/libretro/ludo/libretro"
-	"github.com/libretro/ludo/netplay"
 	"github.com/libretro/ludo/options"
 	"github.com/libretro/ludo/patch"
 	"github.com/libretro/ludo/state"
@@ -61,7 +60,7 @@ func Load(sofile string) error {
 	state.Global.Core.SetEnvironment(environment)
 	state.Global.Core.Init()
 	state.Global.Core.SetVideoRefresh(vid.Refresh)
-	state.Global.Core.SetInputPoll(input.FakePoll)
+	state.Global.Core.SetInputPoll(func() {})
 	state.Global.Core.SetInputState(input.State)
 	state.Global.Core.SetAudioSample(audio.Sample)
 	state.Global.Core.SetAudioSampleBatch(audio.SampleBatch)
@@ -80,8 +79,6 @@ func Load(sofile string) error {
 			log.Println("[Core]: Block extract:", si.BlockExtract)
 		}
 	}
-
-	netplay.Init()
 
 	return nil
 }
