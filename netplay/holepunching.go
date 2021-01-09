@@ -46,67 +46,70 @@ func receiveReply(conn *net.UDPConn) (uint, string, error) {
 	return 0, "", nil
 }
 
-func punch() (*net.UDPConn, net.Addr) {
+func punch() (*net.UDPConn, net.Addr, error) {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
 		IP:   net.ParseIP("195.201.56.250"),
 		Port: 1234,
 	})
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
 
 	rdv.SetReadBuffer(1048576)
 
 	_, err = rdv.Write(makeHi())
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
 
 	myIdx, my, err := receiveReply(rdv)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
 	log.Println("I am", my)
 	input.LocalPlayerPort = myIdx
 
 	_, myPortStr, err := net.SplitHostPort(my)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
-	myPort, _ := strconv.ParseInt(myPortStr, 10, 64)
+	myPort, err := strconv.ParseInt(myPortStr, 10, 64)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	peerIdx, peer, err := receiveReply(rdv)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
 	log.Println("I see", peer)
 	input.RemotePlayerPort = peerIdx
 
 	peerIP, peerPortStr, err := net.SplitHostPort(peer)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
-	peerPort, _ := strconv.ParseInt(peerPortStr, 10, 64)
+	peerPort, err := strconv.ParseInt(peerPortStr, 10, 64)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	peerAddr := &net.UDPAddr{
 		IP:   net.ParseIP(peerIP),
 		Port: int(peerPort),
 	}
 
-	rdv.Close()
+	err = rdv.Close()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	p2p, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP:   net.ParseIP("0.0.0.0"),
 		Port: int(myPort),
 	})
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
 	log.Println("Listening on", p2p.LocalAddr())
 
@@ -115,13 +118,12 @@ func punch() (*net.UDPConn, net.Addr) {
 	log.Println("Sending hello")
 	_, err = p2p.WriteTo(makeHi(), peerAddr)
 	if err != nil {
-		log.Println(err.Error())
-		return nil, nil
+		return nil, nil, err
 	}
 
 	for {
 		_, msg, _ := receiveReply(p2p)
 		log.Println(msg)
-		return p2p, peerAddr
+		return p2p, peerAddr, nil
 	}
 }

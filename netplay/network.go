@@ -50,7 +50,11 @@ var inputPoll, gameUpdate func()
 
 // Init initialises a netplay session between two players
 func Init(pollCb, updateCb func()) {
-	Conn, clientAddr = punch()
+	var err error
+	Conn, clientAddr, err = punch()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	connectedToClient = true
 
