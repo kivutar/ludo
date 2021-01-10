@@ -15,7 +15,7 @@ import (
 )
 
 // MaxPlayers is the maximum number of players to poll input for
-const MaxPlayers = 2
+const MaxPlayers = 5
 
 // MaxFrames is the max number of frames to keep in the input buffer. Used by netplay.
 const MaxFrames = int64(60)
@@ -26,7 +26,6 @@ var LocalPlayerPort = uint(0)
 // RemotePlayerPort is the joypad port of the remote player
 var RemotePlayerPort = uint(1)
 
-var polled = States{}
 var buffers = [MaxPlayers][MaxFrames]PlayerState{}
 
 type joybinds map[bind]uint32
@@ -95,7 +94,7 @@ func getState(port uint, tick int64) PlayerState {
 
 // GetLatest returns the most recent polled inputs
 func GetLatest(port uint) PlayerState {
-	return polled[port]
+	return NewState[port]
 }
 
 func currentState(port uint) PlayerState {
@@ -146,12 +145,12 @@ func pollJoypads() {
 			case btn:
 				if int(k.index) < len(buttonState) &&
 					glfw.Action(buttonState[k.index]) == glfw.Press {
-					polled[p][v] = true
+					NewState[p][v] = true
 				}
 			case axis:
 				if int(k.index) < len(axisState) &&
 					k.direction*axisState[k.index] > k.threshold*k.direction {
-					polled[p][v] = true
+					NewState[p][v] = true
 				}
 			}
 
@@ -160,15 +159,15 @@ func pollJoypads() {
 			}
 			switch {
 			case axisState[0] < -0.5:
-				polled[p][libretro.DeviceIDJoypadLeft] = true
+				NewState[p][libretro.DeviceIDJoypadLeft] = true
 			case axisState[0] > 0.5:
-				polled[p][libretro.DeviceIDJoypadRight] = true
+				NewState[p][libretro.DeviceIDJoypadRight] = true
 			}
 			switch {
 			case axisState[1] > 0.5:
-				polled[p][libretro.DeviceIDJoypadDown] = true
+				NewState[p][libretro.DeviceIDJoypadDown] = true
 			case axisState[1] < -0.5:
-				polled[p][libretro.DeviceIDJoypadUp] = true
+				NewState[p][libretro.DeviceIDJoypadUp] = true
 			}
 		}
 	}
@@ -178,7 +177,7 @@ func pollJoypads() {
 func pollKeyboard() {
 	for k, v := range keyBinds {
 		if vid.Window.GetKey(k) == glfw.Press {
-			polled[LocalPlayerPort][v] = true
+			NewState[LocalPlayerPort][v] = true
 		}
 	}
 }
@@ -196,10 +195,9 @@ func getPressedReleased(new States, old States) (States, States) {
 
 // Poll calculates the input state. It is meant to be called for each frame.
 func Poll() {
-	polled = States{}
+	NewState = States{}
 	pollKeyboard()
 	pollJoypads()
-	NewState = polled
 
 	Pressed, Released = getPressedReleased(NewState, OldState)
 
@@ -207,7 +205,7 @@ func Poll() {
 	OldState = NewState
 }
 
-// State is a callback passed to core.SetStates
+// State is a callback passed to core.SetInputState
 // It returns 1 if the button corresponding to the parameters is pressed
 func State(port uint, device uint32, index uint, id uint) int16 {
 	if id >= 255 || index > 0 || port >= MaxPlayers || device&libretro.DeviceJoypad != 1 || id > uint(libretro.DeviceIDJoypadR3) {
