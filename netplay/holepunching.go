@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"io/ioutil"
 	"log"
@@ -36,15 +37,13 @@ func getROMCRC(f string) uint32 {
 	}
 }
 
-func rdvReceiveData(conn *net.UDPConn) error {
+func rdvReceiveData(rdv *net.UDPConn) error {
 	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
+	n, err := rdv.Read(buffer)
 	if err != nil {
 		return err
 	}
 	data := buffer[:n]
-
-	log.Println("Received", data)
 
 	r := bytes.NewReader(data)
 
@@ -100,19 +99,20 @@ func rdvReceiveData(conn *net.UDPConn) error {
 			Port: int(peerPort),
 		}
 
-		if err := conn.Close(); err != nil {
+		if err := rdv.Close(); err != nil {
 			return err
 		}
 
-		Conn, err = net.ListenUDP("udp", localAddr)
+		conn, err = net.ListenUDP("udp", localAddr)
 		if err != nil {
 			return err
 		}
 
-		return Conn.SetReadBuffer(1048576)
-	}
+		return conn.SetReadBuffer(1048576)
 
-	return nil
+	default:
+		return errors.New("Unknown packet type")
+	}
 }
 
 func makeJoinPacket() []byte {
@@ -137,7 +137,8 @@ func UDPHolePunching() error {
 		return err
 	}
 
-	for Conn == nil {
+	// Process the rdv connection data until conn is initialized
+	for conn == nil {
 		if err = rdvReceiveData(rdv); err != nil {
 			return err
 		}

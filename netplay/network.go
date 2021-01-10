@@ -29,9 +29,7 @@ var Listen bool
 // Join is used by the netplay guest, address of the host
 var Join bool
 
-// Conn is the connection between two players
-var Conn *net.UDPConn
-
+var conn *net.UDPConn // conn is the connection between two players
 var connectedToClient = false
 var confirmedTick = int64(0)
 var localSyncData = uint32(0)
@@ -59,7 +57,7 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	if err := UDPHolePunching(); err != nil {
 		log.Fatalln(err)
 	}
-	log.Println("Listening on", Conn.LocalAddr())
+	log.Println("Listening on", conn.LocalAddr())
 
 	log.Println("Sending handshake")
 	sendPacket(makeHandshakePacket(), 5)
@@ -117,7 +115,7 @@ func sendPacket(packet []byte, duplicates int) {
 
 // Send a packet immediately
 func sendPacketRaw(packet []byte) {
-	_, err := Conn.WriteTo(packet, remoteAddr)
+	_, err := conn.WriteTo(packet, remoteAddr)
 	if err != nil {
 		log.Println(err)
 	}
@@ -126,7 +124,7 @@ func sendPacketRaw(packet []byte) {
 func listen() {
 	for {
 		buffer := make([]byte, 1024)
-		n, err := Conn.Read(buffer)
+		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
 			continue
