@@ -43,6 +43,7 @@ var localTickDelta = int64(0)
 var remoteTickDelta = int64(0)
 var localInputHistory = [historySize]uint32{}
 var remoteInputHistory = [historySize]uint32{}
+var selfAddr *net.UDPAddr
 var clientAddr net.Addr
 var lastSyncedTick = int64(-1)
 var messages chan []byte
@@ -56,7 +57,7 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	gameUpdate = updateCb
 
 	var err error
-	Conn, clientAddr, err = punch()
+	Conn, err = punch()
 	if err != nil {
 		log.Fatalln(err)
 	}

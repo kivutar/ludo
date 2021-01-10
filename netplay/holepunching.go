@@ -16,9 +16,12 @@ import (
 
 const (
 	msgJoin      = byte(1)
-	msgIP        = byte(2)
-	msgHandshake = byte(3)
+	msgOwnIP     = byte(2)
+	msgPeerIP    = byte(3)
+	msgHandshake = byte(4)
 )
+
+var holePunched bool
 
 // getROMCRC returns the CRC32 sum of the rom
 func getROMCRC(f string) uint32 {
@@ -48,11 +51,11 @@ func makeHandshakePacket() []byte {
 	return buf.Bytes()
 }
 
-func receiveReply(conn *net.UDPConn) (uint, string, error) {
+func receive(conn *net.UDPConn) error {
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
 	if err != nil {
-		return 0, "", err
+		return err
 	}
 	data := buffer[:n]
 
@@ -61,95 +64,97 @@ func receiveReply(conn *net.UDPConn) (uint, string, error) {
 	r := bytes.NewReader(data)
 
 	var code byte
-
-	binary.Read(r, binary.LittleEndian, &code)
-	if code == msgIP {
-		var playerID byte
-		binary.Read(r, binary.LittleEndian, &playerID)
-		addr := data[2:]
-		return uint(playerID), string(addr), nil
+	err = binary.Read(r, binary.LittleEndian, &code)
+	if err != nil {
+		return err
 	}
 
-	return 0, "", nil
+	switch code {
+	case msgOwnIP:
+		var playerID byte
+		binary.Read(r, binary.LittleEndian, &playerID)
+		input.LocalPlayerPort = uint(playerID)
+
+		addr := string(data[2:])
+		log.Println("I am", addr)
+
+		_, myPortStr, err := net.SplitHostPort(addr)
+		if err != nil {
+			return err
+		}
+		myPort, err := strconv.ParseInt(myPortStr, 10, 64)
+		if err != nil {
+			return err
+		}
+		selfAddr = &net.UDPAddr{
+			IP:   net.ParseIP("0.0.0.0"),
+			Port: int(myPort),
+		}
+
+		return nil
+	case msgPeerIP:
+		var playerID byte
+		binary.Read(r, binary.LittleEndian, &playerID)
+		input.RemotePlayerPort = uint(playerID)
+
+		addr := string(data[2:])
+		log.Println("I see", addr)
+
+		peerIP, peerPortStr, err := net.SplitHostPort(addr)
+		if err != nil {
+			return err
+		}
+		peerPort, err := strconv.ParseInt(peerPortStr, 10, 64)
+		if err != nil {
+			return err
+		}
+		clientAddr = &net.UDPAddr{
+			IP:   net.ParseIP(peerIP),
+			Port: int(peerPort),
+		}
+
+		holePunched = true
+		return conn.Close()
+	}
+
+	return nil
 }
 
-func punch() (*net.UDPConn, net.Addr, error) {
+func punch() (*net.UDPConn, error) {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("195.201.56.250"),
+		IP:   net.ParseIP("127.0.0.1"),
 		Port: 1234,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	rdv.SetReadBuffer(1048576)
 
-	_, err = rdv.Write(makeJoinPacket())
-	if err != nil {
-		return nil, nil, err
+	if _, err := rdv.Write(makeJoinPacket()); err != nil {
+		return nil, err
 	}
 
-	myIdx, my, err := receiveReply(rdv)
-	if err != nil {
-		return nil, nil, err
-	}
-	log.Println("I am", my)
-
-	_, myPortStr, err := net.SplitHostPort(my)
-	if err != nil {
-		return nil, nil, err
-	}
-	myPort, err := strconv.ParseInt(myPortStr, 10, 64)
-	if err != nil {
-		return nil, nil, err
+	for !holePunched {
+		if err = receive(rdv); err != nil {
+			return nil, err
+		}
 	}
 
-	peerIdx, peer, err := receiveReply(rdv)
+	p2p, err := net.ListenUDP("udp", selfAddr)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	log.Println("I see", peer)
-
-	peerIP, peerPortStr, err := net.SplitHostPort(peer)
-	if err != nil {
-		return nil, nil, err
-	}
-	peerPort, err := strconv.ParseInt(peerPortStr, 10, 64)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	peerAddr := &net.UDPAddr{
-		IP:   net.ParseIP(peerIP),
-		Port: int(peerPort),
-	}
-
-	err = rdv.Close()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	p2p, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   net.ParseIP("0.0.0.0"),
-		Port: int(myPort),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
 	p2p.SetReadBuffer(1048576)
 
-	log.Println("Sending hello")
-	_, err = p2p.WriteTo(makeHandshakePacket(), peerAddr)
+	log.Println("Sending handshake")
+	_, err = p2p.WriteTo(makeHandshakePacket(), clientAddr)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	for {
-		_, msg, _ := receiveReply(p2p)
-		log.Println(msg)
-		input.LocalPlayerPort = myIdx
-		input.RemotePlayerPort = peerIdx
-		return p2p, peerAddr, nil
+		err = receive(p2p)
+		return p2p, err
 	}
 }
