@@ -18,7 +18,7 @@ import (
 const (
 	MsgCodeJoin   = byte(1) // Create or join a netplay room
 	MsgCodeOwnIP  = byte(2) // Get to know your own external IP as well as your player index
-	MsgCodePeerIP = byte(3) // Get the IP of your peer
+	MsgCodePeerIP = byte(3) // Get the IP of your peer, along with its player index
 )
 
 // getROMCRC returns the CRC32 sum of the rom
@@ -55,10 +55,11 @@ func rdvReceiveData(conn *net.UDPConn) error {
 	}
 
 	switch code {
+
 	case MsgCodeOwnIP:
-		var playerID byte
-		binary.Read(r, binary.LittleEndian, &playerID)
-		input.LocalPlayerPort = uint(playerID)
+		var playerIndex byte
+		binary.Read(r, binary.LittleEndian, &playerIndex)
+		input.LocalPlayerPort = uint(playerIndex)
 
 		addr := string(data[2:])
 		log.Println("I am", addr)
@@ -77,10 +78,11 @@ func rdvReceiveData(conn *net.UDPConn) error {
 		}
 
 		return nil
+
 	case MsgCodePeerIP:
-		var playerID byte
-		binary.Read(r, binary.LittleEndian, &playerID)
-		input.RemotePlayerPort = uint(playerID)
+		var playerIndex byte
+		binary.Read(r, binary.LittleEndian, &playerIndex)
+		input.RemotePlayerPort = uint(playerIndex)
 
 		addr := string(data[2:])
 		log.Println("I see", addr)
