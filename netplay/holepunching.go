@@ -20,8 +20,8 @@ const (
 	msgHandshake = byte(3)
 )
 
-// GetROMCRC returns the CRC32 sum of the rom
-func GetROMCRC(f string) uint32 {
+// getROMCRC returns the CRC32 sum of the rom
+func getROMCRC(f string) uint32 {
 	ext := filepath.Ext(f)
 	switch ext {
 	case ".zip":
@@ -42,7 +42,7 @@ func makeJoinPacket() []byte {
 	return buf.Bytes()
 }
 
-func makeHandshake() []byte {
+func makeHandshakePacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, msgHandshake)
 	return buf.Bytes()
@@ -136,12 +136,11 @@ func punch() (*net.UDPConn, net.Addr, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	log.Println("Listening on", p2p.LocalAddr())
 
 	p2p.SetReadBuffer(1048576)
 
 	log.Println("Sending hello")
-	_, err = p2p.WriteTo(makeHandshake(), peerAddr)
+	_, err = p2p.WriteTo(makeHandshakePacket(), peerAddr)
 	if err != nil {
 		return nil, nil, err
 	}

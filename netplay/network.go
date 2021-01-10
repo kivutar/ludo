@@ -51,7 +51,7 @@ var romCRC uint32
 
 // Init initialises a netplay session between two players
 func Init(gamePath string, pollCb, updateCb func()) {
-	romCRC = GetROMCRC(gamePath)
+	romCRC = getROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb
 
@@ -60,6 +60,7 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	log.Println("Listening on", Conn.LocalAddr())
 
 	connectedToClient = true
 
