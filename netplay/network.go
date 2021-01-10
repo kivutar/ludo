@@ -47,9 +47,11 @@ var clientAddr net.Addr
 var lastSyncedTick = int64(-1)
 var messages chan []byte
 var inputPoll, gameUpdate func()
+var romCRC uint32
 
 // Init initialises a netplay session between two players
-func Init(pollCb, updateCb func()) {
+func Init(gamePath string, pollCb, updateCb func()) {
+	romCRC = GetROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb
 
@@ -248,13 +250,6 @@ func makeSyncDataPacket(tick int64, syncData uint32) []byte {
 	binary.Write(buf, binary.LittleEndian, MsgCodeSync)
 	binary.Write(buf, binary.LittleEndian, tick)
 	binary.Write(buf, binary.LittleEndian, syncData)
-	return buf.Bytes()
-}
-
-// Generate handshake packet for connecting with another client.
-func makeHandshakePacket() []byte {
-	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, MsgCodeHandshake)
 	return buf.Bytes()
 }
 

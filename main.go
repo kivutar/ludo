@@ -127,7 +127,7 @@ func main() {
 	// No game running? display the menu
 	state.Global.MenuActive = !state.Global.CoreRunning
 
-	netplay.Init(input.Poll, gameUpdate)
+	netplay.Init(gamePath, input.Poll, gameUpdate)
 
 	runLoop(vid, m)
 

@@ -1,23 +1,50 @@
 package netplay
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
+	"io/ioutil"
 	"log"
 	"net"
+	"path/filepath"
 	"strconv"
 
 	"github.com/libretro/ludo/input"
 )
 
 const (
-	msgJoin = byte(1)
-	msgIP   = byte(2)
+	msgJoin      = byte(1)
+	msgIP        = byte(2)
+	msgHandshake = byte(3)
 )
 
-func makeHi() []byte {
+// GetROMCRC returns the CRC32 sum of the rom
+func GetROMCRC(f string) uint32 {
+	ext := filepath.Ext(f)
+	switch ext {
+	case ".zip":
+		// Open the ZIP archive
+		z, _ := zip.OpenReader(f)
+		defer z.Close()
+		return z.File[0].CRC32
+	default:
+		bytes, _ := ioutil.ReadFile(f)
+		return crc32.ChecksumIEEE(bytes)
+	}
+}
+
+func makeJoinPacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, msgJoin)
+	binary.Write(buf, binary.LittleEndian, romCRC)
+	return buf.Bytes()
+}
+
+func makeHandshake() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, msgHandshake)
 	return buf.Bytes()
 }
 
@@ -57,7 +84,7 @@ func punch() (*net.UDPConn, net.Addr, error) {
 
 	rdv.SetReadBuffer(1048576)
 
-	_, err = rdv.Write(makeHi())
+	_, err = rdv.Write(makeJoinPacket())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -114,7 +141,7 @@ func punch() (*net.UDPConn, net.Addr, error) {
 	p2p.SetReadBuffer(1048576)
 
 	log.Println("Sending hello")
-	_, err = p2p.WriteTo(makeHi(), peerAddr)
+	_, err = p2p.WriteTo(makeHandshake(), peerAddr)
 	if err != nil {
 		return nil, nil, err
 	}
