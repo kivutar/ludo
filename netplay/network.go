@@ -56,15 +56,13 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	inputPoll = pollCb
 	gameUpdate = updateCb
 
-	var err error
-	Conn, err = punch()
-	if err != nil {
+	if err := UDPHolePunching(); err != nil {
 		log.Fatalln(err)
 	}
 	log.Println("Listening on", Conn.LocalAddr())
 
 	log.Println("Sending handshake")
-	Conn.WriteTo(makeHandshakePacket(), clientAddr)
+	sendPacket(makeHandshakePacket(), 5)
 
 	messages = make(chan []byte, 256)
 	go listen()

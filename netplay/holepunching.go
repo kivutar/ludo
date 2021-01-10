@@ -21,8 +21,6 @@ const (
 	msgHandshake = byte(4)
 )
 
-var holePunched bool
-
 // getROMCRC returns the CRC32 sum of the rom
 func getROMCRC(f string) uint32 {
 	ext := filepath.Ext(f)
@@ -38,14 +36,7 @@ func getROMCRC(f string) uint32 {
 	}
 }
 
-func makeJoinPacket() []byte {
-	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, msgJoin)
-	binary.Write(buf, binary.LittleEndian, romCRC)
-	return buf.Bytes()
-}
-
-func receive(conn *net.UDPConn) error {
+func rdvReceiveData(conn *net.UDPConn) error {
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
 	if err != nil {
@@ -107,39 +98,48 @@ func receive(conn *net.UDPConn) error {
 			Port: int(peerPort),
 		}
 
-		holePunched = true
-		return conn.Close()
+		if err := conn.Close(); err != nil {
+			return err
+		}
+
+		Conn, err = net.ListenUDP("udp", selfAddr)
+		if err != nil {
+			return err
+		}
+
+		return Conn.SetReadBuffer(1048576)
 	}
 
 	return nil
 }
 
-func punch() (*net.UDPConn, error) {
+func makeJoinPacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, msgJoin)
+	binary.Write(buf, binary.LittleEndian, romCRC)
+	return buf.Bytes()
+}
+
+// UDPHolePunching attempt to traverse the NAT
+func UDPHolePunching() error {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
 		IP:   net.ParseIP("127.0.0.1"),
 		Port: 1234,
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-
 	rdv.SetReadBuffer(1048576)
 
 	if _, err := rdv.Write(makeJoinPacket()); err != nil {
-		return nil, err
+		return err
 	}
 
-	for !holePunched {
-		if err = receive(rdv); err != nil {
-			return nil, err
+	for Conn == nil {
+		if err = rdvReceiveData(rdv); err != nil {
+			return err
 		}
 	}
 
-	p2p, err := net.ListenUDP("udp", selfAddr)
-	if err != nil {
-		return nil, err
-	}
-	p2p.SetReadBuffer(1048576)
-
-	return p2p, nil
+	return nil
 }
