@@ -14,11 +14,11 @@ import (
 	"github.com/libretro/ludo/input"
 )
 
+// Network code indicating the type of message.
 const (
-	msgJoin      = byte(1)
-	msgOwnIP     = byte(2)
-	msgPeerIP    = byte(3)
-	msgHandshake = byte(4)
+	MsgCodeJoin   = byte(1) // Create or join a netplay room
+	MsgCodeOwnIP  = byte(2) // Get to know your own external IP as well as your player index
+	MsgCodePeerIP = byte(3) // Get the IP of your peer
 )
 
 // getROMCRC returns the CRC32 sum of the rom
@@ -55,7 +55,7 @@ func rdvReceiveData(conn *net.UDPConn) error {
 	}
 
 	switch code {
-	case msgOwnIP:
+	case MsgCodeOwnIP:
 		var playerID byte
 		binary.Read(r, binary.LittleEndian, &playerID)
 		input.LocalPlayerPort = uint(playerID)
@@ -71,13 +71,13 @@ func rdvReceiveData(conn *net.UDPConn) error {
 		if err != nil {
 			return err
 		}
-		selfAddr = &net.UDPAddr{
+		localAddr = &net.UDPAddr{
 			IP:   net.ParseIP("0.0.0.0"),
 			Port: int(myPort),
 		}
 
 		return nil
-	case msgPeerIP:
+	case MsgCodePeerIP:
 		var playerID byte
 		binary.Read(r, binary.LittleEndian, &playerID)
 		input.RemotePlayerPort = uint(playerID)
@@ -93,7 +93,7 @@ func rdvReceiveData(conn *net.UDPConn) error {
 		if err != nil {
 			return err
 		}
-		clientAddr = &net.UDPAddr{
+		remoteAddr = &net.UDPAddr{
 			IP:   net.ParseIP(peerIP),
 			Port: int(peerPort),
 		}
@@ -102,7 +102,7 @@ func rdvReceiveData(conn *net.UDPConn) error {
 			return err
 		}
 
-		Conn, err = net.ListenUDP("udp", selfAddr)
+		Conn, err = net.ListenUDP("udp", localAddr)
 		if err != nil {
 			return err
 		}
@@ -115,7 +115,7 @@ func rdvReceiveData(conn *net.UDPConn) error {
 
 func makeJoinPacket() []byte {
 	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, msgJoin)
+	binary.Write(buf, binary.LittleEndian, MsgCodeJoin)
 	binary.Write(buf, binary.LittleEndian, romCRC)
 	return buf.Bytes()
 }
@@ -123,7 +123,7 @@ func makeJoinPacket() []byte {
 // UDPHolePunching attempt to traverse the NAT
 func UDPHolePunching() error {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("127.0.0.1"),
+		IP:   net.ParseIP("195.201.56.250"),
 		Port: 1234,
 	})
 	if err != nil {
