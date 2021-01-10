@@ -45,12 +45,6 @@ func makeJoinPacket() []byte {
 	return buf.Bytes()
 }
 
-func makeHandshakePacket() []byte {
-	buf := new(bytes.Buffer)
-	binary.Write(buf, binary.LittleEndian, msgHandshake)
-	return buf.Bytes()
-}
-
 func receive(conn *net.UDPConn) error {
 	buffer := make([]byte, 1024)
 	n, err := conn.Read(buffer)
@@ -147,14 +141,5 @@ func punch() (*net.UDPConn, error) {
 	}
 	p2p.SetReadBuffer(1048576)
 
-	log.Println("Sending handshake")
-	_, err = p2p.WriteTo(makeHandshakePacket(), clientAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	for {
-		err = receive(p2p)
-		return p2p, err
-	}
+	return p2p, nil
 }

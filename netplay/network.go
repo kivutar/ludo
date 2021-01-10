@@ -63,7 +63,8 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	}
 	log.Println("Listening on", Conn.LocalAddr())
 
-	connectedToClient = true
+	log.Println("Sending handshake")
+	Conn.WriteTo(makeHandshakePacket(), clientAddr)
 
 	messages = make(chan []byte, 256)
 	go listen()
@@ -146,7 +147,9 @@ func receiveData() {
 			var code byte
 			binary.Read(r, binary.LittleEndian, &code)
 
-			if code == MsgCodePlayerInput {
+			if code == MsgCodeHandshake {
+				connectedToClient = true
+			} else if code == MsgCodePlayerInput {
 				// Break apart the packet into its parts.
 				var tickDelta, receivedTick int64
 				binary.Read(r, binary.LittleEndian, &tickDelta)
@@ -252,6 +255,12 @@ func makeSyncDataPacket(tick int64, syncData uint32) []byte {
 	binary.Write(buf, binary.LittleEndian, MsgCodeSync)
 	binary.Write(buf, binary.LittleEndian, tick)
 	binary.Write(buf, binary.LittleEndian, syncData)
+	return buf.Bytes()
+}
+
+func makeHandshakePacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeHandshake)
 	return buf.Bytes()
 }
 
