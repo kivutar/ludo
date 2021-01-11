@@ -86,9 +86,6 @@ func sendInputData(tick int64) {
 	if !connectedToClient {
 		return
 	}
-
-	//log.Println("Send input packet", tick)
-
 	sendPacket(makeInputPacket(tick), 1)
 }
 
@@ -120,6 +117,7 @@ func sendPacketRaw(packet []byte) {
 	}
 }
 
+// Listen on the UDP connection
 func listen() {
 	for {
 		if conn == nil {
@@ -169,14 +167,11 @@ func receiveData() {
 
 					confirmedTick = receivedTick
 
-					// log.Println("----")
-					// log.Println(confirmedTick)
 					for offset := int64(sendHistorySize - 1); offset >= 0; offset-- {
 						var encodedInput uint32
 						binary.Read(r, binary.LittleEndian, &encodedInput)
 						// Save the input history sent in the packet.
 						setRemoteEncodedInput(encodedInput, receivedTick-offset)
-						// log.Println(encodedInput, receivedTick-offset, offset)
 					}
 				}
 			} else if code == MsgCodePing {
@@ -214,11 +209,9 @@ func makeInputPacket(tick int64) []byte {
 	binary.Write(buf, binary.LittleEndian, tick)
 
 	historyIndexStart := tick - sendHistorySize + 1
-	// log.Println("Make input", tick, historyIndexStart)
 	for i := int64(0); i < sendHistorySize; i++ {
 		encodedInput := localInputHistory[(historySize+historyIndexStart+i)%historySize]
 		binary.Write(buf, binary.LittleEndian, encodedInput)
-		// log.Println((historySize + historyIndexStart + i) % historySize)
 	}
 
 	return buf.Bytes()
@@ -259,6 +252,7 @@ func makeSyncDataPacket(tick int64, syncData uint32) []byte {
 	return buf.Bytes()
 }
 
+// Make a handshake packet
 func makeHandshakePacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, MsgCodeHandshake)
