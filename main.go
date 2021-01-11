@@ -40,9 +40,17 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 
 		state.Global.ForcePause = vid.Window.GetKey(glfw.KeySpace) == glfw.Press
 
-		netplay.Update()
-
-		vid.Render()
+		if !state.Global.MenuActive {
+			if state.Global.CoreRunning {
+				netplay.Update()
+			}
+			vid.Render()
+		} else {
+			input.Poll()
+			m.Update(dt)
+			vid.Render()
+			m.Render(dt)
+		}
 
 		m.RenderNotifications()
 		if state.Global.FastForward {
@@ -52,16 +60,6 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 		}
 		vid.Window.SwapBuffers()
 		prevTime = currTime
-	}
-}
-
-func gameUpdate() {
-	state.Global.Core.Run()
-	if state.Global.Core.FrameTimeCallback != nil {
-		state.Global.Core.FrameTimeCallback.Callback(state.Global.Core.FrameTimeCallback.Reference)
-	}
-	if state.Global.Core.AudioCallback != nil {
-		state.Global.Core.AudioCallback.Callback()
 	}
 }
 
@@ -126,8 +124,6 @@ func main() {
 
 	// No game running? display the menu
 	state.Global.MenuActive = !state.Global.CoreRunning
-
-	netplay.Init(gamePath, input.Poll, gameUpdate)
 
 	runLoop(vid, m)
 
