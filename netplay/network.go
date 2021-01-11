@@ -9,6 +9,7 @@ import (
 
 	"github.com/libretro/ludo/input"
 	ntf "github.com/libretro/ludo/notifications"
+	"github.com/libretro/ludo/state"
 )
 
 const inputDelayFrames = 3
@@ -45,6 +46,7 @@ var romCRC uint32
 
 // Init initialises a netplay session between two players
 func Init(gamePath string, pollCb, updateCb func()) {
+	state.Global.Tick = 0
 	romCRC = getROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb

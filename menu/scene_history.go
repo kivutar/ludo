@@ -23,13 +23,16 @@ func buildHistory() Scene {
 		game := game // needed for callbackOK
 		strippedName, tags := extractTags(game.Name)
 		list.children = append(list.children, entry{
-			label:      strippedName,
-			subLabel:   game.System,
-			gameName:   game.Name,
-			path:       game.Path,
-			system:     game.System,
-			tags:       tags,
-			callbackOK: func() { loadHistoryEntry(&list, game) },
+			label:    strippedName,
+			subLabel: game.System,
+			gameName: game.Name,
+			path:     game.Path,
+			system:   game.System,
+			tags:     tags,
+			callbackOK: func() {
+				state.Global.Netplay = false
+				loadHistoryEntry(&list, game)
+			},
 			callbackSpecial: func() {
 				state.Global.Netplay = true
 				loadHistoryEntry(&list, game)

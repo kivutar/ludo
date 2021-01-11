@@ -27,12 +27,15 @@ func buildPlaylist(path string) Scene {
 		game := game // needed for callbackOK
 		strippedName, tags := extractTags(game.Name)
 		list.children = append(list.children, entry{
-			label:      strippedName,
-			gameName:   game.Name,
-			path:       game.Path,
-			tags:       tags,
-			icon:       utils.FileName(path) + "-content",
-			callbackOK: func() { loadPlaylistEntry(&list, list.label, game) },
+			label:    strippedName,
+			gameName: game.Name,
+			path:     game.Path,
+			tags:     tags,
+			icon:     utils.FileName(path) + "-content",
+			callbackOK: func() {
+				state.Global.Netplay = false
+				loadPlaylistEntry(&list, list.label, game)
+			},
 			callbackSpecial: func() {
 				state.Global.Netplay = true
 				loadPlaylistEntry(&list, list.label, game)
