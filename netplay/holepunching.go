@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/libretro/ludo/input"
+	ntf "github.com/libretro/ludo/notifications"
 )
 
 // Network code indicating the type of message.
@@ -76,6 +77,8 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 			Port: int(myPort),
 		}
 
+		ntf.DisplayAndLog(ntf.Info, "Netplay", "Waiting for the second player to join")
+
 		return nil
 
 	case MsgCodePeerIP:
@@ -107,8 +110,14 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 		if err != nil {
 			return err
 		}
+		ntf.DisplayAndLog(ntf.Info, "Netplay", "Listening on %s", conn.LocalAddr().String())
 
-		return conn.SetReadBuffer(1048576)
+		conn.SetReadBuffer(1048576)
+
+		ntf.DisplayAndLog(ntf.Info, "Netplay", "Sending handshake")
+		sendPacket(makeHandshakePacket(), 5)
+
+		return nil
 
 	default:
 		return errors.New("Unknown packet type")
@@ -125,7 +134,7 @@ func makeJoinPacket() []byte {
 // UDPHolePunching attempt to traverse the NAT
 func UDPHolePunching() error {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("195.201.56.250"),
+		IP:   net.ParseIP("127.0.0.1"),
 		Port: 1234,
 	})
 	if err != nil {
@@ -136,6 +145,8 @@ func UDPHolePunching() error {
 	if _, err := rdv.Write(makeJoinPacket()); err != nil {
 		return err
 	}
+
+	ntf.DisplayAndLog(ntf.Info, "Netplay", "Connected to the relay")
 
 	// Process the rdv connection data until conn is initialized
 	for conn == nil {

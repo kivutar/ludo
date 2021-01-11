@@ -54,16 +54,14 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	romCRC = getROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb
-
-	if err := UDPHolePunching(); err != nil {
-		log.Fatalln(err)
-	}
-	ntf.DisplayAndLog(ntf.Info, "Netplay", "Listening on %s", conn.LocalAddr().String())
-
-	ntf.DisplayAndLog(ntf.Info, "Netplay", "Sending handshake")
-	sendPacket(makeHandshakePacket(), 5)
-
 	messages = make(chan []byte, 256)
+
+	go func() {
+		if err := UDPHolePunching(); err != nil {
+			ntf.DisplayAndLog(ntf.Error, "Netplay", err.Error())
+		}
+	}()
+
 	go listen()
 }
 
@@ -124,6 +122,9 @@ func sendPacketRaw(packet []byte) {
 
 func listen() {
 	for {
+		if conn == nil {
+			continue
+		}
 		buffer := make([]byte, 1024)
 		n, err := conn.Read(buffer)
 		if err != nil {
