@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/libretro/ludo/audio"
 	"github.com/libretro/ludo/input"
@@ -18,6 +19,7 @@ import (
 	"github.com/libretro/ludo/netplay"
 	"github.com/libretro/ludo/options"
 	"github.com/libretro/ludo/patch"
+	"github.com/libretro/ludo/savefiles"
 	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/video"
 )
@@ -31,17 +33,17 @@ var Options *options.Options
 // Call Init before calling other functions of this package.
 func Init(v *video.Video) {
 	vid = v
-	// ticker := time.NewTicker(time.Second * 10)
-	// go func() {
-	// 	for range ticker.C {
-	// 		state.Global.Lock()
-	// 		canSave := state.Global.CoreRunning && !state.Global.MenuActive
-	// 		state.Global.Unlock()
-	// 		if canSave {
-	// 			savefiles.SaveSRAM()
-	// 		}
-	// 	}
-	// }()
+	ticker := time.NewTicker(time.Second * 10)
+	go func() {
+		for range ticker.C {
+			state.Global.Lock()
+			canSave := state.Global.CoreRunning && !state.Global.MenuActive && !state.Global.Netplay
+			state.Global.Unlock()
+			if canSave {
+				savefiles.SaveSRAM()
+			}
+		}
+	}()
 }
 
 // Load loads a libretro core
@@ -208,10 +210,11 @@ func LoadGame(gamePath string) error {
 	state.Global.Core.SetControllerPortDevice(4, libretro.DeviceJoypad)
 
 	log.Println("[Core]: Game loaded: " + gamePath)
-	// savefiles.LoadSRAM()
 
 	if state.Global.Netplay {
 		netplay.Init(gamePath, input.Poll, Update)
+	} else {
+		savefiles.LoadSRAM()
 	}
 
 	return nil
@@ -233,7 +236,9 @@ func Unload() {
 // UnloadGame unloads a game.
 func UnloadGame() {
 	if state.Global.CoreRunning {
-		//savefiles.SaveSRAM()
+		if !state.Global.Netplay {
+			savefiles.SaveSRAM()
+		}
 		state.Global.Core.UnloadGame()
 		state.Global.Lock()
 		state.Global.GamePath = ""
