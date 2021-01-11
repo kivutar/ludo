@@ -24,12 +24,6 @@ const (
 	MsgCodeSync        = byte(5) // Used to pass sync data
 )
 
-// Listen is used by the netplay host, listening address and port
-var Listen bool
-
-// Join is used by the netplay guest, address of the host
-var Join bool
-
 var conn *net.UDPConn // conn is the connection between two players
 var connectedToClient = false
 var confirmedTick = int64(0)

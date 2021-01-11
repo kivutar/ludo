@@ -98,6 +98,9 @@ func GetLatest(port uint) PlayerState {
 }
 
 func currentState(port uint) PlayerState {
+	if !state.Global.Netplay {
+		return GetLatest(port)
+	}
 	return getState(port, state.Global.Tick)
 }
 

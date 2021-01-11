@@ -210,7 +210,9 @@ func LoadGame(gamePath string) error {
 	log.Println("[Core]: Game loaded: " + gamePath)
 	// savefiles.LoadSRAM()
 
-	netplay.Init(gamePath, input.Poll, Update)
+	if state.Global.Netplay {
+		netplay.Init(gamePath, input.Poll, Update)
+	}
 
 	return nil
 }

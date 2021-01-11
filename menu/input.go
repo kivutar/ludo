@@ -93,6 +93,14 @@ func genericInput(list *entry, dt float32) {
 		}
 	}
 
+	// Special
+	if input.Released[0][libretro.DeviceIDJoypadY] {
+		if list.children[list.ptr].callbackSpecial != nil {
+			audio.PlayEffect(audio.Effects["ok"])
+			list.children[list.ptr].callbackSpecial()
+		}
+	}
+
 	// Right
 	if input.Released[0][libretro.DeviceIDJoypadRight] {
 		if list.children[list.ptr].incr != nil {

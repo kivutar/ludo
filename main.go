@@ -42,7 +42,12 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 
 		if !state.Global.MenuActive {
 			if state.Global.CoreRunning {
-				netplay.Update()
+				if state.Global.Netplay {
+					netplay.Update()
+				} else {
+					input.Poll()
+					core.Update()
+				}
 			}
 			vid.Render()
 		} else {

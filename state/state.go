@@ -22,6 +22,7 @@ type State struct {
 	FastForward bool           // Run the core as fast as possible
 	Tick        int64
 	ForcePause  bool
+	Netplay     bool
 
 	sync.Mutex
 }

@@ -30,6 +30,10 @@ func buildHistory() Scene {
 			system:     game.System,
 			tags:       tags,
 			callbackOK: func() { loadHistoryEntry(&list, game) },
+			callbackSpecial: func() {
+				state.Global.Netplay = true
+				loadHistoryEntry(&list, game)
+			},
 		})
 	}
 
@@ -192,7 +196,7 @@ func (s *sceneHistory) drawHintBar() {
 	w, h := vid.Window.GetFramebufferSize()
 	vid.DrawRect(0, float32(h)-70*menu.ratio, float32(w), 70*menu.ratio, 0, lightGrey)
 
-	_, upDown, _, a, b, _, _, _, _, guide := hintIcons()
+	_, upDown, _, a, b, _, y, _, _, guide := hintIcons()
 
 	var stack float32
 	if state.Global.CoreRunning {
@@ -201,4 +205,5 @@ func (s *sceneHistory) drawHintBar() {
 	stackHint(&stack, upDown, "NAVIGATE", h)
 	stackHint(&stack, b, "BACK", h)
 	stackHint(&stack, a, "RUN", h)
+	stackHint(&stack, y, "NETPLAY", h)
 }
