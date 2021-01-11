@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/libretro/ludo/input"
+	ntf "github.com/libretro/ludo/notifications"
 )
 
 const inputDelayFrames = 3
@@ -57,9 +58,9 @@ func Init(gamePath string, pollCb, updateCb func()) {
 	if err := UDPHolePunching(); err != nil {
 		log.Fatalln(err)
 	}
-	log.Println("Listening on", conn.LocalAddr())
+	ntf.DisplayAndLog(ntf.Info, "Netplay", "Listening on %s", conn.LocalAddr().String())
 
-	log.Println("Sending handshake")
+	ntf.DisplayAndLog(ntf.Info, "Netplay", "Sending handshake")
 	sendPacket(makeHandshakePacket(), 5)
 
 	messages = make(chan []byte, 256)
@@ -144,7 +145,10 @@ func receiveData() {
 			binary.Read(r, binary.LittleEndian, &code)
 
 			if code == MsgCodeHandshake {
-				connectedToClient = true
+				if !connectedToClient {
+					ntf.DisplayAndLog(ntf.Success, "Netplay", "Connected")
+					connectedToClient = true
+				}
 			} else if code == MsgCodePlayerInput {
 				// Break apart the packet into its parts.
 				var tickDelta, receivedTick int64
