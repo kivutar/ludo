@@ -7,7 +7,6 @@ import (
 	"errors"
 	"hash/crc32"
 	"io/ioutil"
-	"log"
 	"net"
 	"path/filepath"
 	"strconv"
@@ -28,7 +27,6 @@ func getROMCRC(f string) uint32 {
 	ext := filepath.Ext(f)
 	switch ext {
 	case ".zip":
-		// Open the ZIP archive
 		z, _ := zip.OpenReader(f)
 		defer z.Close()
 		return z.File[0].CRC32
@@ -61,10 +59,7 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 		binary.Read(r, binary.LittleEndian, &playerIndex)
 		input.LocalPlayerPort = uint(playerIndex)
 
-		addr := string(data[2:])
-		log.Println("I am", addr)
-
-		_, myPortStr, err := net.SplitHostPort(addr)
+		_, myPortStr, err := net.SplitHostPort(string(data[2:]))
 		if err != nil {
 			return err
 		}
@@ -86,10 +81,7 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 		binary.Read(r, binary.LittleEndian, &playerIndex)
 		input.RemotePlayerPort = uint(playerIndex)
 
-		addr := string(data[2:])
-		log.Println("I see", addr)
-
-		peerIP, peerPortStr, err := net.SplitHostPort(addr)
+		peerIP, peerPortStr, err := net.SplitHostPort(string(data[2:]))
 		if err != nil {
 			return err
 		}
@@ -124,6 +116,7 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 	}
 }
 
+// Join the hole punching server
 func makeJoinPacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, MsgCodeJoin)

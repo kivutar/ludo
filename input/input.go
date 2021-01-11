@@ -212,7 +212,6 @@ func State(port uint, device uint32, index uint, id uint) int16 {
 		return 0
 	}
 
-	// log.Println("input:", port, id, currentState(port)[id], state.Global.Tick)
 	if currentState(port)[id] {
 		return 1
 	}

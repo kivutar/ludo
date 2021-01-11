@@ -252,7 +252,7 @@ func makeSyncDataPacket(tick int64, syncData uint32) []byte {
 	return buf.Bytes()
 }
 
-// Make a handshake packet
+// Generate handshake packet for connecting with another client.
 func makeHandshakePacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, MsgCodeHandshake)
