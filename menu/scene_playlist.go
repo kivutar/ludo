@@ -33,6 +33,10 @@ func buildPlaylist(path string) Scene {
 			tags:       tags,
 			icon:       utils.FileName(path) + "-content",
 			callbackOK: func() { loadPlaylistEntry(&list, list.label, game) },
+			callbackSpecial: func() {
+				state.Global.Netplay = true
+				loadPlaylistEntry(&list, list.label, game)
+			},
 		})
 	}
 
@@ -213,7 +217,7 @@ func (s *scenePlaylist) drawHintBar() {
 	w, h := vid.Window.GetFramebufferSize()
 	vid.DrawRect(0, float32(h)-70*menu.ratio, float32(w), 70*menu.ratio, 0, lightGrey)
 
-	_, upDown, _, a, b, _, _, _, _, guide := hintIcons()
+	_, upDown, _, a, b, _, y, _, _, guide := hintIcons()
 
 	var stack float32
 	if state.Global.CoreRunning {
@@ -222,4 +226,5 @@ func (s *scenePlaylist) drawHintBar() {
 	stackHint(&stack, upDown, "NAVIGATE", h)
 	stackHint(&stack, b, "BACK", h)
 	stackHint(&stack, a, "RUN", h)
+	stackHint(&stack, y, "NETPLAY", h)
 }
