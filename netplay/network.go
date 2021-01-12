@@ -23,6 +23,7 @@ const (
 	MsgCodePing        = byte(3) // Used to tracking packet round trip time. Expect a "Pong" back.
 	MsgCodePong        = byte(4) // Sent in reply to a Ping message for testing round trip time.
 	MsgCodeSync        = byte(5) // Used to pass sync data
+	MsgCodeQuit        = byte(6)
 )
 
 var conn *net.UDPConn // conn is the connection between two players
@@ -123,7 +124,7 @@ func listen() {
 		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
-			continue
+			return
 		}
 		messages <- buffer[:n]
 	}
@@ -139,12 +140,13 @@ func receiveData() {
 			var code byte
 			binary.Read(r, binary.LittleEndian, &code)
 
-			if code == MsgCodeHandshake {
+			switch code {
+			case MsgCodeHandshake:
 				if !connectedToClient {
 					ntf.DisplayAndLog(ntf.Success, "Netplay", "Connected")
 					connectedToClient = true
 				}
-			} else if code == MsgCodePlayerInput {
+			case MsgCodePlayerInput:
 				// Break apart the packet into its parts.
 				var tickDelta, receivedTick int64
 				binary.Read(r, binary.LittleEndian, &tickDelta)
@@ -170,14 +172,14 @@ func receiveData() {
 						setRemoteEncodedInput(encodedInput, receivedTick-offset)
 					}
 				}
-			} else if code == MsgCodePing {
+			case MsgCodePing:
 				var pingTime int64
 				binary.Read(r, binary.LittleEndian, &pingTime)
 				sendPacket(makePongPacket(time.Unix(pingTime, 0)), 1)
-			} else if code == MsgCodePong {
+			case MsgCodePong:
 				var pongTime int64
 				binary.Read(r, binary.LittleEndian, &pongTime)
-			} else if code == MsgCodeSync {
+			case MsgCodeSync:
 				var tick int64
 				var syncData uint32
 				binary.Read(r, binary.LittleEndian, &tick)
@@ -190,6 +192,14 @@ func receiveData() {
 					// Check for a desync
 					isDesynced()
 				}
+			case MsgCodeQuit:
+				if !connectedToClient {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player left")
+				conn.Close()
+				state.Global.Netplay = false
+				connectedToClient = false
 			}
 		default:
 			return
@@ -253,6 +263,17 @@ func makeHandshakePacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, MsgCodeHandshake)
 	return buf.Bytes()
+}
+
+func makeQuitPacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeQuit)
+	return buf.Bytes()
+}
+
+// SendQuit notifies the pair that we closed the game
+func SendQuit() {
+	sendPacket(makeQuitPacket(), 5)
 }
 
 // Encodes the player input state into a compact form for network transmission.

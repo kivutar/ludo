@@ -3,6 +3,7 @@ package menu
 import (
 	"github.com/libretro/ludo/audio"
 	"github.com/libretro/ludo/core"
+	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/utils"
@@ -39,6 +40,9 @@ func buildQuickMenu() Scene {
 		label: "Close",
 		icon:  "close",
 		callbackOK: func() {
+			if state.Global.Netplay {
+				netplay.SendQuit()
+			}
 			core.Unload()
 			audio.PlayEffect(audio.Effects["cancel"])
 			menu.stack[len(menu.stack)-2].segueBack()
