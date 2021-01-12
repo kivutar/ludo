@@ -135,12 +135,11 @@ func Init(v *video.Video) {
 	glfw.SetJoystickCallback(joystickCallback)
 }
 
-// pollJoypads process joypads of all players
-func pollJoypads() {
-	p := LocalPlayerPort
-	buttonState := glfw.Joystick.GetButtons(glfw.Joystick(0))
-	axisState := glfw.Joystick.GetAxes(glfw.Joystick(0))
-	name := glfw.Joystick.GetName(glfw.Joystick(0))
+func pollJoypad(from, to uint) {
+	p := to
+	buttonState := glfw.Joystick.GetButtons(glfw.Joystick(from))
+	axisState := glfw.Joystick.GetAxes(glfw.Joystick(from))
+	name := glfw.Joystick.GetName(glfw.Joystick(from))
 	jb := joyBinds[name]
 	if len(buttonState) > 0 {
 		for k, v := range jb {
@@ -172,6 +171,17 @@ func pollJoypads() {
 			case axisState[1] < -0.5:
 				NewState[p][libretro.DeviceIDJoypadUp] = true
 			}
+		}
+	}
+}
+
+// pollJoypads process joypads of all players
+func pollJoypads() {
+	if state.Global.Netplay {
+		pollJoypad(0, LocalPlayerPort)
+	} else {
+		for p := range NewState {
+			pollJoypad(uint(p), uint(p))
 		}
 	}
 }
