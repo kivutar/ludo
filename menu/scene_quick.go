@@ -1,6 +1,8 @@
 package menu
 
 import (
+	"github.com/libretro/ludo/audio"
+	"github.com/libretro/ludo/core"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/utils"
@@ -30,6 +32,17 @@ func buildQuickMenu() Scene {
 			state.Global.Core.Reset()
 			state.Global.MenuActive = false
 			state.Global.FastForward = false
+		},
+	})
+
+	list.children = append(list.children, entry{
+		label: "Close",
+		icon:  "close",
+		callbackOK: func() {
+			core.Unload()
+			audio.PlayEffect(audio.Effects["cancel"])
+			menu.stack[len(menu.stack)-2].segueBack()
+			menu.stack = menu.stack[:len(menu.stack)-1]
 		},
 	})
 
