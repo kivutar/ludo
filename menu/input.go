@@ -4,6 +4,7 @@ import (
 	"github.com/libretro/ludo/audio"
 	"github.com/libretro/ludo/input"
 	"github.com/libretro/ludo/libretro"
+	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/settings"
 	"github.com/libretro/ludo/state"
@@ -175,8 +176,14 @@ func (m *Menu) ProcessHotkeys() {
 		state.Global.FastForward = false
 		if state.Global.MenuActive {
 			audio.PlayEffect(audio.Effects["notice"])
+			if state.Global.Netplay {
+				netplay.SendPause()
+			}
 		} else {
 			audio.PlayEffect(audio.Effects["notice_back"])
+			if state.Global.Netplay {
+				netplay.SendResume()
+			}
 		}
 	}
 

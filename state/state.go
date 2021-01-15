@@ -20,9 +20,11 @@ type State struct {
 	DB          rdb.DB         // The game database loaded on startup
 	LudOS       bool           // Run Ludo as a unix desktop environment
 	FastForward bool           // Run the core as fast as possible
-	Tick        int64
-	ForcePause  bool
-	Netplay     bool
+
+	Tick       int64 // Used for netplay
+	ForcePause bool  // Used to debug netplay
+	Netplay    bool  // True when netplay is active
+	Paused     bool  // Thue when netplay is paused
 
 	sync.Mutex
 }

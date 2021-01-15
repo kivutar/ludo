@@ -83,6 +83,13 @@ func (m *Menu) Render(dt float32) {
 	m.stack[currentScreenIndex].drawHintBar()
 }
 
+func (m *Menu) RenderPause() {
+	w, h := vid.Window.GetFramebufferSize()
+	if state.Global.Paused {
+		vid.DrawRect(0, 0, float32(w), float32(h), 0, bgColor.Alpha(0.85))
+	}
+}
+
 // ContextReset uploads the UI images to the GPU.
 // It should be called after each time the window is recreated.
 func (m *Menu) ContextReset() {

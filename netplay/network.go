@@ -24,6 +24,8 @@ const (
 	MsgCodePong        = byte(4) // Sent in reply to a Ping message for testing round trip time.
 	MsgCodeSync        = byte(5) // Used to pass sync data
 	MsgCodeQuit        = byte(6)
+	MsgCodePause       = byte(7)
+	MsgCodeResume      = byte(8)
 )
 
 var conn *net.UDPConn // conn is the connection between two players
@@ -200,6 +202,18 @@ func receiveData() {
 				conn.Close()
 				state.Global.Netplay = false
 				connectedToClient = false
+			case MsgCodePause:
+				if state.Global.Paused {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player paused the session")
+				state.Global.Paused = true
+			case MsgCodeResume:
+				if !state.Global.Paused {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player resumed the session")
+				state.Global.Paused = false
 			}
 		default:
 			return
@@ -274,6 +288,28 @@ func makeQuitPacket() []byte {
 // SendQuit notifies the pair that we closed the game
 func SendQuit() {
 	sendPacket(makeQuitPacket(), 5)
+}
+
+func makePausePacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodePause)
+	return buf.Bytes()
+}
+
+// SendPause notifies the pair that we closed the game
+func SendPause() {
+	sendPacket(makePausePacket(), 5)
+}
+
+func makeResumePacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeResume)
+	return buf.Bytes()
+}
+
+// SendResume notifies the pair that we closed the game
+func SendResume() {
+	sendPacket(makeResumePacket(), 5)
 }
 
 // Encodes the player input state into a compact form for network transmission.
