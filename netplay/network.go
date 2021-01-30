@@ -202,6 +202,7 @@ func receiveData() {
 				conn.Close()
 				state.Global.Netplay = false
 				connectedToClient = false
+				state.Global.Paused = false
 			case MsgCodePause:
 				if state.Global.Paused {
 					return
