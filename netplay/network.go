@@ -3,6 +3,7 @@ package netplay
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"log"
 	"net"
 	"time"
@@ -26,6 +27,7 @@ const (
 	MsgCodeQuit        = byte(6)
 	MsgCodePause       = byte(7)
 	MsgCodeResume      = byte(8)
+	MsgCodeState       = byte(9)
 )
 
 var conn *net.UDPConn // conn is the connection between two players
@@ -122,7 +124,7 @@ func listen() {
 		if conn == nil {
 			continue
 		}
-		buffer := make([]byte, 1024)
+		buffer := make([]byte, 1024*60)
 		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
@@ -214,6 +216,33 @@ func receiveData() {
 					return
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player resumed the session")
+				state.Global.Paused = false
+			case MsgCodeState:
+				if !state.Global.Paused {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "Receiving savestate")
+				var tick int64
+				var crc uint32
+				binary.Read(r, binary.LittleEndian, &tick)
+				binary.Read(r, binary.LittleEndian, &crc)
+
+				log.Println(crc)
+				savestate := data[13:]
+
+				log.Println(crc32.ChecksumIEEE(savestate))
+
+				s := state.Global.Core.SerializeSize()
+				state.Global.Core.Unserialize(savestate, s)
+
+				state.Global.Tick = tick
+				localSyncDataTick = tick
+				remoteSyncDataTick = tick
+				confirmedTick = tick
+				lastSyncedTick = tick
+				remoteSyncData = crc
+				localSyncData = crc
+
 				state.Global.Paused = false
 			}
 		default:
@@ -311,6 +340,22 @@ func makeResumePacket() []byte {
 // SendResume notifies the pair that we closed the game
 func SendResume() {
 	sendPacket(makeResumePacket(), 5)
+}
+
+func makeStatePacket(tick int64, savestate []byte) []byte {
+	crc := crc32.ChecksumIEEE(savestate)
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeState)
+	binary.Write(buf, binary.LittleEndian, tick)
+	binary.Write(buf, binary.LittleEndian, crc)
+	binary.Write(buf, binary.LittleEndian, savestate)
+	return buf.Bytes()
+}
+
+// SendState notifies the pair that we closed the game
+func SendState(savestate []byte) {
+	tick := state.Global.Tick - 1 + inputDelayFrames
+	sendPacket(makeStatePacket(tick, savestate), 1)
 }
 
 // Encodes the player input state into a compact form for network transmission.

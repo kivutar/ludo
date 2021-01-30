@@ -105,6 +105,7 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 		ntf.DisplayAndLog(ntf.Info, "Netplay", "Listening on %s", conn.LocalAddr().String())
 
 		conn.SetReadBuffer(1048576)
+		conn.SetWriteBuffer(1048576)
 
 		ntf.DisplayAndLog(ntf.Info, "Netplay", "Sending handshake")
 		sendPacket(makeHandshakePacket(), 5)
@@ -127,7 +128,7 @@ func makeJoinPacket() []byte {
 // UDPHolePunching attempt to traverse the NAT
 func UDPHolePunching() error {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("195.201.56.250"),
+		IP:   net.ParseIP("127.0.0.1"),
 		Port: 1234,
 	})
 	if err != nil {
