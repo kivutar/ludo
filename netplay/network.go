@@ -242,7 +242,7 @@ func receiveData() {
 				lastSyncedTick = tick
 				remoteSyncData = crc
 				localSyncData = crc
-
+				isStateDesynced = false
 				state.Global.Paused = false
 			}
 		default:
@@ -354,7 +354,19 @@ func makeStatePacket(tick int64, savestate []byte) []byte {
 
 // SendState notifies the pair that we closed the game
 func SendState(savestate []byte) {
-	tick := state.Global.Tick - 1 + inputDelayFrames
+	tick := state.Global.Tick
+	crc := crc32.ChecksumIEEE(savestate)
+
+	state.Global.Tick = tick
+	localSyncDataTick = tick
+	remoteSyncDataTick = tick
+	confirmedTick = tick
+	lastSyncedTick = tick
+	remoteSyncData = crc
+	localSyncData = crc
+	isStateDesynced = false
+	state.Global.Paused = false
+
 	sendPacket(makeStatePacket(tick, savestate), 1)
 }
 
