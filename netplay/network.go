@@ -366,7 +366,7 @@ func makeStatePacket(tick int64, savestate []byte) []byte {
 
 // SendState notifies the pair that we closed the game
 func SendState(savestate []byte) {
-	tick := state.Global.Tick
+	tick := state.Global.Tick + 20
 	crc := crc32.ChecksumIEEE(savestate)
 
 	state.Global.Tick = tick
