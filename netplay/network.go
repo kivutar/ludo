@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/libretro/ludo/input"
+	"github.com/libretro/ludo/libretro"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/state"
 )
@@ -230,8 +231,6 @@ func receiveData() {
 				log.Println(crc)
 				savestate := data[13:]
 
-				log.Println(crc32.ChecksumIEEE(savestate))
-
 				s := state.Global.Core.SerializeSize()
 				state.Global.Core.Unserialize(savestate, s)
 
@@ -243,7 +242,20 @@ func receiveData() {
 				remoteSyncData = crc
 				localSyncData = crc
 				isStateDesynced = false
+				localTickDelta = 0
+				remoteTickDelta = 0
+				tickSyncing = false
+				tickOffset = float64(0)
+				lastConfirmedTick = 0
+				syncedLastUpdate = true
 				state.Global.Paused = false
+				input.Reset()
+				localInputHistory = [historySize]uint32{}
+				remoteInputHistory = [historySize]uint32{}
+				state.Global.Paused = false
+				serialize()
+
+				log.Println(state.Global.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
 			}
 		default:
 			return
@@ -365,7 +377,21 @@ func SendState(savestate []byte) {
 	remoteSyncData = crc
 	localSyncData = crc
 	isStateDesynced = false
+	localTickDelta = 0
+	remoteTickDelta = 0
+	tickSyncing = false
+	tickOffset = float64(0)
+	lastConfirmedTick = 0
+	syncedLastUpdate = true
+	input.Reset()
+	localInputHistory = [historySize]uint32{}
+	remoteInputHistory = [historySize]uint32{}
 	state.Global.Paused = false
+	serialize()
+
+	log.Println(state.Global.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
+
+	log.Println("Sending savestate", tick, crc)
 
 	sendPacket(makeStatePacket(tick, savestate), 1)
 }
@@ -374,6 +400,9 @@ func SendState(savestate []byte) {
 func encodeInput(st input.PlayerState) uint32 {
 	var out uint32
 	for i, b := range st {
+		if i > int(libretro.DeviceIDJoypadR3) {
+			continue
+		}
 		if b {
 			out |= (1 << i)
 		}
@@ -385,6 +414,9 @@ func encodeInput(st input.PlayerState) uint32 {
 func decodeInput(in uint32) input.PlayerState {
 	st := input.PlayerState{}
 	for i := range st {
+		if i > int(libretro.DeviceIDJoypadR3) {
+			continue
+		}
 		st[i] = in&(1<<i) > 0
 	}
 	return st

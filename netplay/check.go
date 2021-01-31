@@ -9,7 +9,7 @@ import (
 )
 
 const detectDesyncs = true
-const desyncCheckRate = int64(10)
+const desyncCheckRate = int64(20)
 
 // Gets the sync data to confirm the client game states are in sync
 func gameGetSyncData() uint32 {
