@@ -72,7 +72,7 @@ func rdvReceiveData(rdv *net.UDPConn) error {
 			Port: int(myPort),
 		}
 
-		ntf.DisplayAndLog(ntf.Info, "Netplay", "Waiting for the second player to join")
+		ntf.DisplayAndLog(ntf.Info, "Netplay", "Waiting for peer to connect...")
 
 		return nil
 

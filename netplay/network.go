@@ -201,7 +201,7 @@ func receiveData() {
 				if !connectedToClient {
 					return
 				}
-				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player left")
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer left")
 				conn.Close()
 				state.Global.Netplay = false
 				connectedToClient = false
@@ -210,13 +210,13 @@ func receiveData() {
 				if state.Global.Paused {
 					return
 				}
-				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player paused the session")
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer paused the session")
 				state.Global.Paused = true
 			case MsgCodeResume:
 				if !state.Global.Paused {
 					return
 				}
-				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player resumed the session")
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer resumed the session")
 				state.Global.Paused = false
 			case MsgCodeState:
 				if !state.Global.Paused {
@@ -256,6 +256,7 @@ func receiveData() {
 				serialize()
 
 				log.Println(state.Global.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
+				ntf.DisplayAndLog(ntf.Success, "Menu", "State loaded.")
 			}
 		default:
 			return
