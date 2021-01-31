@@ -248,7 +248,6 @@ func receiveData() {
 				tickOffset = float64(0)
 				lastConfirmedTick = 0
 				syncedLastUpdate = true
-				state.Global.Paused = false
 				input.Reset()
 				localInputHistory = [historySize]uint32{}
 				remoteInputHistory = [historySize]uint32{}
