@@ -190,8 +190,6 @@ func pollJoypad(from, to uint) {
 			NewAnalogState[p][1] = floatToAnalog(axisState[1])
 		}
 	}
-
-	return
 }
 
 // pollJoypads process joypads of all players

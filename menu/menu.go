@@ -83,6 +83,7 @@ func (m *Menu) Render(dt float32) {
 	m.stack[currentScreenIndex].drawHintBar()
 }
 
+// RenderPause renders a transparent black background during netplay pause
 func (m *Menu) RenderPause() {
 	w, h := menu.GetFramebufferSize()
 	if state.Paused {
