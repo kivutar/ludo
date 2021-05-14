@@ -52,7 +52,7 @@ var romCRC uint32
 
 // Init initialises a netplay session between two players
 func Init(gamePath string, pollCb, updateCb func()) {
-	state.Global.Tick = 0
+	state.Tick = 0
 	romCRC = getROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb
@@ -203,23 +203,23 @@ func receiveData() {
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer left")
 				conn.Close()
-				state.Global.Netplay = false
+				state.Netplay = false
 				connectedToClient = false
-				state.Global.Paused = false
+				state.Paused = false
 			case MsgCodePause:
-				if state.Global.Paused {
+				if state.Paused {
 					return
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer paused the session")
-				state.Global.Paused = true
+				state.Paused = true
 			case MsgCodeResume:
-				if !state.Global.Paused {
+				if !state.Paused {
 					return
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer resumed the session")
-				state.Global.Paused = false
+				state.Paused = false
 			case MsgCodeState:
-				if !state.Global.Paused {
+				if !state.Paused {
 					return
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "Receiving savestate")
@@ -231,10 +231,10 @@ func receiveData() {
 				log.Println(crc)
 				savestate := data[13:]
 
-				s := state.Global.Core.SerializeSize()
-				state.Global.Core.Unserialize(savestate, s)
+				s := state.Core.SerializeSize()
+				state.Core.Unserialize(savestate, s)
 
-				state.Global.Tick = tick
+				state.Tick = tick
 				localSyncDataTick = tick
 				remoteSyncDataTick = tick
 				confirmedTick = tick
@@ -251,10 +251,10 @@ func receiveData() {
 				input.Reset()
 				localInputHistory = [historySize]uint32{}
 				remoteInputHistory = [historySize]uint32{}
-				state.Global.Paused = false
+				state.Paused = false
 				serialize()
 
-				log.Println(state.Global.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
+				log.Println(state.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
 				ntf.DisplayAndLog(ntf.Success, "Menu", "State loaded.")
 			}
 		default:
@@ -366,10 +366,10 @@ func makeStatePacket(tick int64, savestate []byte) []byte {
 
 // SendState notifies the pair that we closed the game
 func SendState(savestate []byte) {
-	tick := state.Global.Tick + 20
+	tick := state.Tick + 20
 	crc := crc32.ChecksumIEEE(savestate)
 
-	state.Global.Tick = tick
+	state.Tick = tick
 	localSyncDataTick = tick
 	remoteSyncDataTick = tick
 	confirmedTick = tick
@@ -386,10 +386,10 @@ func SendState(savestate []byte) {
 	input.Reset()
 	localInputHistory = [historySize]uint32{}
 	remoteInputHistory = [historySize]uint32{}
-	state.Global.Paused = false
+	state.Paused = false
 	serialize()
 
-	log.Println(state.Global.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
+	log.Println(state.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
 
 	log.Println("Sending savestate", tick, crc)
 
@@ -403,9 +403,7 @@ func encodeInput(st input.PlayerState) uint32 {
 		if i > int(libretro.DeviceIDJoypadR3) {
 			continue
 		}
-		if b {
-			out |= (1 << i)
-		}
+		out |= (uint32(b) << i)
 	}
 	return out
 }
@@ -417,7 +415,7 @@ func decodeInput(in uint32) input.PlayerState {
 		if i > int(libretro.DeviceIDJoypadR3) {
 			continue
 		}
-		st[i] = in&(1<<i) > 0
+		st[i] = int16(in) & (1 << i)
 	}
 	return st
 }
