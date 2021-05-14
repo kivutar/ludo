@@ -1,10 +1,12 @@
 package menu
 
 import (
+	"io/ioutil"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/savestates"
 	"github.com/libretro/ludo/settings"
@@ -56,6 +58,11 @@ func buildSavestates() Scene {
 					ntf.DisplayAndLog(ntf.Error, "Menu", err.Error())
 				} else {
 					state.MenuActive = false
+
+					if state.Netplay {
+						bytes, _ := ioutil.ReadFile(path)
+						netplay.SendState(bytes)
+					}
 
 					ntf.DisplayAndLog(ntf.Success, "Menu", "State loaded.")
 				}

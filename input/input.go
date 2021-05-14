@@ -79,6 +79,12 @@ func index(offset int64) int64 {
 	return (MaxFrames + tick) % MaxFrames
 }
 
+func Reset() {
+	buffers = [MaxPlayers][MaxFrames]PlayerState{}
+	NewState = States{}
+	OldState = States{}
+}
+
 // Serialize saves the current input state, used by netplay
 func Serialize() [MaxPlayers][MaxFrames]PlayerState {
 	copy := deepcopy.MustAnything(buffers)

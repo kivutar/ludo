@@ -23,6 +23,9 @@ func buildQuickMenu() Scene {
 		callbackOK: func() {
 			state.MenuActive = false
 			state.FastForward = false
+			if state.Netplay {
+				netplay.SendResume()
+			}
 		},
 	})
 

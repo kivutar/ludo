@@ -3,11 +3,13 @@ package netplay
 import (
 	"bytes"
 	"encoding/binary"
+	"hash/crc32"
 	"log"
 	"net"
 	"time"
 
 	"github.com/libretro/ludo/input"
+	"github.com/libretro/ludo/libretro"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/state"
 )
@@ -26,6 +28,7 @@ const (
 	MsgCodeQuit        = byte(6)
 	MsgCodePause       = byte(7)
 	MsgCodeResume      = byte(8)
+	MsgCodeState       = byte(9)
 )
 
 var conn *net.UDPConn // conn is the connection between two players
@@ -122,7 +125,7 @@ func listen() {
 		if conn == nil {
 			continue
 		}
-		buffer := make([]byte, 1024)
+		buffer := make([]byte, 1024*60)
 		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
@@ -198,7 +201,7 @@ func receiveData() {
 				if !connectedToClient {
 					return
 				}
-				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player left")
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer left")
 				conn.Close()
 				state.Netplay = false
 				connectedToClient = false
@@ -207,14 +210,52 @@ func receiveData() {
 				if state.Paused {
 					return
 				}
-				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player paused the session")
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer paused the session")
 				state.Paused = true
 			case MsgCodeResume:
 				if !state.Paused {
 					return
 				}
-				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player resumed the session")
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The peer resumed the session")
 				state.Paused = false
+			case MsgCodeState:
+				if !state.Paused {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "Receiving savestate")
+				var tick int64
+				var crc uint32
+				binary.Read(r, binary.LittleEndian, &tick)
+				binary.Read(r, binary.LittleEndian, &crc)
+
+				log.Println(crc)
+				savestate := data[13:]
+
+				s := state.Core.SerializeSize()
+				state.Core.Unserialize(savestate, s)
+
+				state.Tick = tick
+				localSyncDataTick = tick
+				remoteSyncDataTick = tick
+				confirmedTick = tick
+				lastSyncedTick = tick
+				remoteSyncData = crc
+				localSyncData = crc
+				isStateDesynced = false
+				localTickDelta = 0
+				remoteTickDelta = 0
+				tickSyncing = false
+				tickOffset = float64(0)
+				lastConfirmedTick = 0
+				syncedLastUpdate = true
+				input.Reset()
+				localInputHistory = [historySize]uint32{}
+				remoteInputHistory = [historySize]uint32{}
+				state.Paused = false
+				serialize()
+
+				log.Println(state.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
+				ntf.DisplayAndLog(ntf.Success, "Menu", "State loaded.")
 			}
 		default:
 			return
@@ -313,10 +354,55 @@ func SendResume() {
 	sendPacket(makeResumePacket(), 5)
 }
 
+func makeStatePacket(tick int64, savestate []byte) []byte {
+	crc := crc32.ChecksumIEEE(savestate)
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeState)
+	binary.Write(buf, binary.LittleEndian, tick)
+	binary.Write(buf, binary.LittleEndian, crc)
+	binary.Write(buf, binary.LittleEndian, savestate)
+	return buf.Bytes()
+}
+
+// SendState notifies the pair that we closed the game
+func SendState(savestate []byte) {
+	tick := state.Tick + 20
+	crc := crc32.ChecksumIEEE(savestate)
+
+	state.Tick = tick
+	localSyncDataTick = tick
+	remoteSyncDataTick = tick
+	confirmedTick = tick
+	lastSyncedTick = tick
+	remoteSyncData = crc
+	localSyncData = crc
+	isStateDesynced = false
+	localTickDelta = 0
+	remoteTickDelta = 0
+	tickSyncing = false
+	tickOffset = float64(0)
+	lastConfirmedTick = 0
+	syncedLastUpdate = true
+	input.Reset()
+	localInputHistory = [historySize]uint32{}
+	remoteInputHistory = [historySize]uint32{}
+	state.Paused = false
+	serialize()
+
+	log.Println(state.Tick, localSyncDataTick, remoteSyncDataTick, confirmedTick, lastSyncedTick, localTickDelta, remoteTickDelta)
+
+	log.Println("Sending savestate", tick, crc)
+
+	sendPacket(makeStatePacket(tick, savestate), 1)
+}
+
 // Encodes the player input state into a compact form for network transmission.
 func encodeInput(st input.PlayerState) uint32 {
 	var out uint32
 	for i, b := range st {
+		if i > int(libretro.DeviceIDJoypadR3) {
+			continue
+		}
 		out |= (uint32(b) << i)
 	}
 	return out
@@ -326,6 +412,9 @@ func encodeInput(st input.PlayerState) uint32 {
 func decodeInput(in uint32) input.PlayerState {
 	st := input.PlayerState{}
 	for i := range st {
+		if i > int(libretro.DeviceIDJoypadR3) {
+			continue
+		}
 		st[i] = int16(in) & (1 << i)
 	}
 	return st
