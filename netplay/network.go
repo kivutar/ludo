@@ -49,7 +49,7 @@ var romCRC uint32
 
 // Init initialises a netplay session between two players
 func Init(gamePath string, pollCb, updateCb func()) {
-	state.Global.Tick = 0
+	state.Tick = 0
 	romCRC = getROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb
@@ -200,21 +200,21 @@ func receiveData() {
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player left")
 				conn.Close()
-				state.Global.Netplay = false
+				state.Netplay = false
 				connectedToClient = false
-				state.Global.Paused = false
+				state.Paused = false
 			case MsgCodePause:
-				if state.Global.Paused {
+				if state.Paused {
 					return
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player paused the session")
-				state.Global.Paused = true
+				state.Paused = true
 			case MsgCodeResume:
-				if !state.Global.Paused {
+				if !state.Paused {
 					return
 				}
 				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player resumed the session")
-				state.Global.Paused = false
+				state.Paused = false
 			}
 		default:
 			return
@@ -317,9 +317,7 @@ func SendResume() {
 func encodeInput(st input.PlayerState) uint32 {
 	var out uint32
 	for i, b := range st {
-		if b {
-			out |= (1 << i)
-		}
+		out |= (uint32(b) << i)
 	}
 	return out
 }
@@ -328,7 +326,7 @@ func encodeInput(st input.PlayerState) uint32 {
 func decodeInput(in uint32) input.PlayerState {
 	st := input.PlayerState{}
 	for i := range st {
-		st[i] = in&(1<<i) > 0
+		st[i] = int16(in) & (1 << i)
 	}
 	return st
 }

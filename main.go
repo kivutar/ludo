@@ -16,6 +16,7 @@ import (
 	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/playlists"
+	"github.com/libretro/ludo/savefiles"
 	"github.com/libretro/ludo/scanner"
 	"github.com/libretro/ludo/settings"
 	"github.com/libretro/ludo/state"
@@ -26,6 +27,8 @@ func init() {
 	// GLFW event handling must run on the main OS thread
 	runtime.LockOSThread()
 }
+
+var frame = 0
 
 func runLoop(vid *video.Video, m *menu.Menu) {
 	currTime := time.Now()
@@ -39,11 +42,11 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 		vid.ResizeViewport()
 		m.UpdatePalette()
 
-		state.Global.ForcePause = vid.Window.GetKey(glfw.KeySpace) == glfw.Press
+		state.ForcePause = vid.Window.GetKey(glfw.KeySpace) == glfw.Press
 
-		if !state.Global.MenuActive {
-			if state.Global.CoreRunning {
-				if state.Global.Netplay {
+		if !state.MenuActive {
+			if state.CoreRunning {
+				if state.Netplay {
 					netplay.Update()
 				} else {
 					input.Poll()
@@ -51,6 +54,10 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 				}
 			}
 			vid.Render()
+			frame++
+			if frame%600 == 0 && !state.Netplay { // save sram about every 10 sec
+				savefiles.SaveSRAM()
+			}
 		} else {
 			input.Poll()
 			m.Update(dt)
@@ -61,7 +68,7 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 		m.RenderPause()
 
 		m.RenderNotifications()
-		if state.Global.FastForward {
+		if state.FastForward {
 			glfw.SwapInterval(0)
 		} else {
 			glfw.SwapInterval(1)
@@ -79,9 +86,9 @@ func main() {
 	}
 
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	flag.StringVar(&state.Global.CorePath, "L", "", "Path to the libretro core")
-	flag.BoolVar(&state.Global.Verbose, "v", false, "Verbose logs")
-	flag.BoolVar(&state.Global.LudOS, "ludos", false, "Expose the features related to LudOS")
+	flag.StringVar(&state.CorePath, "L", "", "Path to the libretro core")
+	flag.BoolVar(&state.Verbose, "v", false, "Verbose logs")
+	flag.BoolVar(&state.LudOS, "ludos", false, "Expose the features related to LudOS")
 	flag.Parse()
 	args := flag.Args()
 
@@ -95,7 +102,7 @@ func main() {
 	}
 	defer glfw.Terminate()
 
-	state.Global.DB, err = scanner.LoadDB(settings.Current.DatabaseDirectory)
+	state.DB, err = scanner.LoadDB(settings.Current.DatabaseDirectory)
 	if err != nil {
 		log.Println("Can't load game database:", err)
 	}
@@ -114,8 +121,8 @@ func main() {
 
 	input.Init(vid)
 
-	if len(state.Global.CorePath) > 0 {
-		err := core.Load(state.Global.CorePath)
+	if len(state.CorePath) > 0 {
+		err := core.Load(state.CorePath)
 		if err == nil {
 			if len(gamePath) > 0 {
 				err := core.LoadGame(gamePath)
@@ -131,7 +138,7 @@ func main() {
 	}
 
 	// No game running? display the menu
-	state.Global.MenuActive = !state.Global.CoreRunning
+	state.MenuActive = !state.CoreRunning
 
 	runLoop(vid, m)
 
