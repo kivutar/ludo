@@ -40,6 +40,18 @@ func buildPlaylist(path string) Scene {
 				state.Netplay = true
 				loadPlaylistEntry(&list, list.label, game)
 			},
+			callbackX: func() {
+				askDeleteGameConfirmation(func() {
+					deletePlaylistEntry(&list, path, game)
+				})
+			},
+		})
+	}
+
+	if len(playlists.Playlists[path]) == 0 {
+		list.children = append(list.children, entry{
+			label: "Empty playlist",
+			icon:  "subsetting",
 		})
 	}
 
@@ -121,6 +133,48 @@ func loadPlaylistEntry(list *scenePlaylist, playlist string, game playlists.Game
 		list.segueNext()
 		menu.Push(buildQuickMenu())
 	}
+}
+
+func removePlaylistGame(s []playlists.Game, game playlists.Game) []playlists.Game {
+	l := []playlists.Game{}
+	for _, g := range s {
+		if g.Path != game.Path {
+			l = append(l, g)
+		}
+	}
+	return l
+}
+
+func removePlaylistEntry(s []entry, game playlists.Game) []entry {
+	l := []entry{}
+	for _, g := range s {
+		if g.path != game.Path {
+			l = append(l, g)
+		}
+	}
+
+	return l
+}
+
+func deletePlaylistEntry(list *scenePlaylist, path string, game playlists.Game) {
+	playlists.Playlists[path] = removePlaylistGame(playlists.Playlists[path], game)
+	playlists.Save(path)
+	refreshTabs()
+	list.children = removePlaylistEntry(list.children, game)
+
+	if len(playlists.Playlists[path]) == 0 {
+		list.children = append(list.children, entry{
+			label: "Empty playlist",
+			icon:  "subsetting",
+		})
+	}
+
+	if list.ptr >= len(list.children) {
+		list.ptr = len(list.children) - 1
+	}
+
+	buildIndexes(&list.entry)
+	genericAnimate(&list.entry)
 }
 
 // Generic stuff
@@ -220,7 +274,7 @@ func (s *scenePlaylist) drawHintBar() {
 	w, h := menu.GetFramebufferSize()
 	menu.DrawRect(0, float32(h)-70*menu.ratio, float32(w), 70*menu.ratio, 0, lightGrey)
 
-	_, upDown, _, a, b, _, y, _, _, guide := hintIcons()
+	_, upDown, _, a, b, x, y, _, _, guide := hintIcons()
 
 	var stack float32
 	if state.CoreRunning {
@@ -230,4 +284,9 @@ func (s *scenePlaylist) drawHintBar() {
 	stackHint(&stack, b, "BACK", h)
 	stackHint(&stack, a, "RUN", h)
 	stackHint(&stack, y, "NETPLAY", h)
+
+	list := menu.stack[len(menu.stack)-1].Entry()
+	if list.children[list.ptr].callbackX != nil {
+		stackHint(&stack, x, "DELETE", h)
+	}
 }
