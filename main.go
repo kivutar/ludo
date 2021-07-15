@@ -13,6 +13,7 @@ import (
 	"github.com/libretro/ludo/history"
 	"github.com/libretro/ludo/input"
 	"github.com/libretro/ludo/menu"
+	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/playlists"
 	"github.com/libretro/ludo/savefiles"
@@ -40,15 +41,12 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 		ntf.Process(dt)
 		vid.ResizeViewport()
 		m.UpdatePalette()
+
+		state.ForcePause = vid.Window.GetKey(glfw.KeySpace) == glfw.Press
+
 		if !state.MenuActive {
 			if state.CoreRunning {
-				state.Core.Run()
-				if state.Core.FrameTimeCallback != nil {
-					state.Core.FrameTimeCallback.Callback(state.Core.FrameTimeCallback.Reference)
-				}
-				if state.Core.AudioCallback != nil {
-					state.Core.AudioCallback.Callback()
-				}
+				netplay.Update()
 			}
 			vid.Render()
 			frame++
@@ -61,6 +59,7 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 			vid.Render()
 			m.Render(dt)
 		}
+
 		m.RenderNotifications()
 		if state.FastForward {
 			glfw.SwapInterval(0)
@@ -83,6 +82,8 @@ func main() {
 	flag.StringVar(&state.CorePath, "L", "", "Path to the libretro core")
 	flag.BoolVar(&state.Verbose, "v", false, "Verbose logs")
 	flag.BoolVar(&state.LudOS, "ludos", false, "Expose the features related to LudOS")
+	flag.BoolVar(&netplay.Listen, "listen", false, "For the netplay server")
+	flag.BoolVar(&netplay.Join, "join", false, "For the netplay client")
 	flag.Parse()
 	args := flag.Args()
 

@@ -15,9 +15,9 @@ import (
 	"github.com/libretro/ludo/audio"
 	"github.com/libretro/ludo/input"
 	"github.com/libretro/ludo/libretro"
+	"github.com/libretro/ludo/netplay"
 	"github.com/libretro/ludo/options"
 	"github.com/libretro/ludo/patch"
-	"github.com/libretro/ludo/savefiles"
 	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/video"
 )
@@ -50,7 +50,7 @@ func Load(sofile string) error {
 	state.Core.SetEnvironment(environment)
 	state.Core.Init()
 	state.Core.SetVideoRefresh(vid.Refresh)
-	state.Core.SetInputPoll(input.Poll)
+	state.Core.SetInputPoll(func() {})
 	state.Core.SetInputState(input.State)
 	state.Core.SetAudioSample(audio.Sample)
 	state.Core.SetAudioSampleBatch(audio.SampleBatch)
@@ -121,6 +121,17 @@ func unzipGame(filename string) (string, int64, error) {
 	return mainPath, mainSize, nil
 }
 
+// Update runs one frame of the game
+func Update() {
+	state.Core.Run()
+	if state.Core.FrameTimeCallback != nil {
+		state.Core.FrameTimeCallback.Callback(state.Core.FrameTimeCallback.Reference)
+	}
+	if state.Core.AudioCallback != nil {
+		state.Core.AudioCallback.Callback()
+	}
+}
+
 // LoadGame loads a game. A core has to be loaded first.
 func LoadGame(gamePath string) error {
 	if _, err := os.Stat(gamePath); os.IsNotExist(err) {
@@ -186,7 +197,9 @@ func LoadGame(gamePath string) error {
 	state.Core.SetControllerPortDevice(4, libretro.DeviceJoypad)
 
 	log.Println("[Core]: Game loaded: " + gamePath)
-	savefiles.LoadSRAM()
+	// savefiles.LoadSRAM()
+
+	netplay.Init(input.Poll, Update)
 
 	return nil
 }
@@ -205,7 +218,7 @@ func Unload() {
 // UnloadGame unloads a game.
 func UnloadGame() {
 	if state.CoreRunning {
-		savefiles.SaveSRAM()
+		//savefiles.SaveSRAM()
 		state.Core.UnloadGame()
 		state.GamePath = ""
 		state.CoreRunning = false

@@ -4,15 +4,29 @@
 package input
 
 import (
+	deepcopy "github.com/barkimedes/go-deepcopy"
 	"github.com/go-gl/glfw/v3.3/glfw"
+
 	"github.com/libretro/ludo/libretro"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/settings"
+	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/video"
 )
 
 // MaxPlayers is the maximum number of players to poll input for
 const MaxPlayers = 5
+
+// MaxFrames is the max number of frames to keep in the input buffer. Used by netplay.
+const MaxFrames = int64(60)
+
+// LocalPlayerPort is the joypad port of the local player
+var LocalPlayerPort = uint(0)
+
+// RemotePlayerPort is the joypad port of the remote player
+var RemotePlayerPort = uint(1)
+
+var buffers = [MaxPlayers][MaxFrames]PlayerState{}
 
 type joybinds map[bind]uint32
 
@@ -26,8 +40,11 @@ type bind struct {
 	threshold float32
 }
 
+// PlayerState is the state of inputs for a single player
+type PlayerState [ActionLast]int16
+
 // States can store the state of inputs for all players
-type States [MaxPlayers][ActionLast]int16
+type States [MaxPlayers]PlayerState
 
 // AnalogStates can store the state of analog inputs for all players
 type AnalogStates [MaxPlayers][2][2]int16
@@ -55,6 +72,46 @@ const (
 	// ActionLast is used for iterating
 	ActionLast uint32 = libretro.DeviceIDJoypadR3 + 5
 )
+
+func index(offset int64) int64 {
+	tick := state.Tick
+	tick += offset
+	return (MaxFrames + tick) % MaxFrames
+}
+
+// Serialize saves the current input state, used by netplay
+func Serialize() [MaxPlayers][MaxFrames]PlayerState {
+	copy := deepcopy.MustAnything(buffers)
+	return copy.([MaxPlayers][MaxFrames]PlayerState)
+}
+
+// Unserialize restaures the input state from a save, used by netplay
+func Unserialize(st interface{}) {
+	copy := deepcopy.MustAnything(st)
+	buffers = copy.([MaxPlayers][MaxFrames]PlayerState)
+}
+
+func getState(port uint, tick int64) PlayerState {
+	frame := (MaxFrames + tick) % MaxFrames
+	st := buffers[port][frame]
+	return st
+}
+
+// GetLatest returns the most recent polled inputs
+func GetLatest(port uint) PlayerState {
+	return NewState[port]
+}
+
+func currentState(port uint) PlayerState {
+	return getState(port, state.Tick)
+}
+
+// SetState forces the input state for a given player
+func SetState(port uint, st PlayerState) {
+	for i, b := range st {
+		buffers[port][index(0)][i] = b
+	}
+}
 
 // joystickCallback is triggered when a joypad is plugged.
 func joystickCallback(joy glfw.Joystick, event glfw.PeripheralEvent) {
@@ -85,64 +142,63 @@ func floatToAnalog(v float32) int16 {
 }
 
 // pollJoypads process joypads of all players
-func pollJoypads(state States, analogState AnalogStates) (States, AnalogStates) {
-	for p := range state {
-		buttonState := glfw.Joystick.GetButtons(glfw.Joystick(p))
-		axisState := glfw.Joystick.GetAxes(glfw.Joystick(p))
-		name := glfw.Joystick.GetName(glfw.Joystick(p))
-		jb := joyBinds[name]
-		if len(buttonState) > 0 {
-			for k, v := range jb {
-				switch k.kind {
-				case btn:
-					if int(k.index) < len(buttonState) &&
-						glfw.Action(buttonState[k.index]) == glfw.Press {
-						state[p][v] = 1
-					}
-				case axis:
-					if int(k.index) < len(axisState) &&
-						k.direction*axisState[k.index] > k.threshold*k.direction {
-						state[p][v] = 1
-					}
+func pollJoypads() {
+	p := LocalPlayerPort
+	buttonState := glfw.Joystick.GetButtons(glfw.Joystick(0))
+	axisState := glfw.Joystick.GetAxes(glfw.Joystick(0))
+	name := glfw.Joystick.GetName(glfw.Joystick(0))
+	jb := joyBinds[name]
+	if len(buttonState) > 0 {
+		for k, v := range jb {
+			switch k.kind {
+			case btn:
+				if int(k.index) < len(buttonState) &&
+					glfw.Action(buttonState[k.index]) == glfw.Press {
+					NewState[p][v] = 1
 				}
+			case axis:
+				if int(k.index) < len(axisState) &&
+					k.direction*axisState[k.index] > k.threshold*k.direction {
+					NewState[p][v] = 1
+				}
+			}
 
-				if settings.Current.MapAxisToDPad {
-					if axisState[0] < -0.5 {
-						state[p][libretro.DeviceIDJoypadLeft] = 1
-					} else if axisState[0] > 0.5 {
-						state[p][libretro.DeviceIDJoypadRight] = 1
-					}
-					if axisState[1] > 0.5 {
-						state[p][libretro.DeviceIDJoypadDown] = 1
-					} else if axisState[1] < -0.5 {
-						state[p][libretro.DeviceIDJoypadUp] = 1
-					}
-				}
+			if !settings.Current.MapAxisToDPad {
+				continue
+			}
+			switch {
+			case axisState[0] < -0.5:
+				NewState[p][libretro.DeviceIDJoypadLeft] = 1
+			case axisState[0] > 0.5:
+				NewState[p][libretro.DeviceIDJoypadRight] = 1
+			}
+			switch {
+			case axisState[1] > 0.5:
+				NewState[p][libretro.DeviceIDJoypadDown] = 1
+			case axisState[1] < -0.5:
+				NewState[p][libretro.DeviceIDJoypadUp] = 1
 			}
 		}
 	}
 
-	for p := range analogState {
+	for p := range NewAnalogState {
 		axisState := glfw.Joystick.GetAxes(glfw.Joystick(p))
 		if len(axisState) > 3 {
-			analogState[p][0][0] = floatToAnalog(axisState[0])
-			analogState[p][0][1] = floatToAnalog(axisState[1])
-			analogState[p][1][0] = floatToAnalog(axisState[2])
-			analogState[p][1][1] = floatToAnalog(axisState[3])
+			NewAnalogState[p][0][0] = floatToAnalog(axisState[0])
+			NewAnalogState[p][0][1] = floatToAnalog(axisState[1])
+			NewAnalogState[p][1][0] = floatToAnalog(axisState[2])
+			NewAnalogState[p][1][1] = floatToAnalog(axisState[3])
 		}
 	}
-
-	return state, analogState
 }
 
 // pollKeyboard processes keyboard keys
-func pollKeyboard(state States) States {
+func pollKeyboard() {
 	for k, v := range keyBinds {
 		if vid.Window.GetKey(k) == glfw.Press {
-			state[0][v] = 1
+			NewState[LocalPlayerPort][v] = 1
 		}
 	}
-	return state
 }
 
 // Compute the keys pressed or released during this frame
@@ -167,8 +223,9 @@ func getPressedReleased(new States, old States) (States, States) {
 // Poll calculates the input state. It is meant to be called for each frame.
 func Poll() {
 	NewState = States{}
-	NewState, NewAnalogState = pollJoypads(NewState, NewAnalogState)
-	NewState = pollKeyboard(NewState)
+	pollKeyboard()
+	pollJoypads()
+
 	Pressed, Released = getPressedReleased(NewState, OldState)
 
 	// Store the old input state for comparisions
@@ -182,11 +239,12 @@ func State(port uint, device uint32, index uint, id uint) int16 {
 		return 0
 	}
 
+	// log.Println("input:", port, id, currentState(port)[id], state.Tick)
 	if device == libretro.DeviceJoypad {
 		if id >= uint(ActionLast) || index > 0 {
 			return 0
 		}
-		return NewState[port][id]
+		return currentState(port)[id]
 	}
 	if device == libretro.DeviceAnalog {
 		if id > 1 || index > 1 {
