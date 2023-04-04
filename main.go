@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"runtime"
@@ -31,7 +32,7 @@ func init() {
 var frame = 0
 
 func runLoop(vid *video.Video, m *menu.Menu) {
-	currTime := time.Now()
+	var currTime time.Time
 	prevTime := time.Now()
 	for !vid.Window.ShouldClose() {
 		currTime = time.Now()
@@ -46,11 +47,16 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 
 		if !state.MenuActive {
 			if state.CoreRunning {
-				netplay.Update()
+				if state.Netplay {
+					netplay.Update()
+				} else {
+					input.Poll()
+					core.Update()
+				}
 			}
 			vid.Render()
 			frame++
-			if frame%600 == 0 { // save sram about every 10 sec
+			if frame%600 == 0 && !state.Netplay { // save sram about every 10 sec
 				savefiles.SaveSRAM()
 			}
 		} else {
@@ -59,6 +65,8 @@ func runLoop(vid *video.Video, m *menu.Menu) {
 			vid.Render()
 			m.Render(dt)
 		}
+
+		m.RenderPause()
 
 		m.RenderNotifications()
 		if state.FastForward {
@@ -78,12 +86,21 @@ func main() {
 		log.Println("[Settings]: Using default settings")
 	}
 
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	// ExitOnError causes flags to quit after displaying help.
+	// (--help counts as an error)
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+
+	// customize help message
+	flag.CommandLine.Usage = func() {
+		fmt.Printf("Usage: %s [OPTIONS] [content]\n", os.Args[0])
+		fmt.Printf("Options:\n")
+		flag.PrintDefaults()
+	}
+
+	// set arguments
 	flag.StringVar(&state.CorePath, "L", "", "Path to the libretro core")
 	flag.BoolVar(&state.Verbose, "v", false, "Verbose logs")
 	flag.BoolVar(&state.LudOS, "ludos", false, "Expose the features related to LudOS")
-	flag.BoolVar(&netplay.Listen, "listen", false, "For the netplay server")
-	flag.BoolVar(&netplay.Join, "join", false, "For the netplay client")
 	flag.Parse()
 	args := flag.Args()
 

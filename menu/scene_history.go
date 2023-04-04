@@ -23,14 +23,25 @@ func buildHistory() Scene {
 		game := game // needed for callbackOK
 		strippedName, tags := extractTags(game.Name)
 		list.children = append(list.children, entry{
-			label:      strippedName,
-			subLabel:   game.System,
-			gameName:   game.Name,
-			path:       game.Path,
-			system:     game.System,
-			tags:       tags,
-			callbackOK: func() { loadHistoryEntry(&list, game) },
-			callbackX:  func() { askDeleteGameConfirmation(func() { deleteHistoryEntry(&list, game) }) },
+			label:    strippedName,
+			subLabel: game.System,
+			gameName: game.Name,
+			path:     game.Path,
+			system:   game.System,
+			tags:     tags,
+			callbackOK: func() {
+				state.Netplay = false
+				loadHistoryEntry(&list, game)
+			},
+			callbackSpecial: func() {
+				state.Netplay = true
+				loadHistoryEntry(&list, game)
+			},
+			callbackX: func() {
+				askDeleteGameConfirmation(func() {
+					deleteHistoryEntry(&list, game)
+				})
+			},
 		})
 	}
 
@@ -235,7 +246,7 @@ func (s *sceneHistory) drawHintBar() {
 	w, h := menu.GetFramebufferSize()
 	menu.DrawRect(0, float32(h)-70*menu.ratio, float32(w), 70*menu.ratio, 0, lightGrey)
 
-	_, upDown, _, a, b, x, _, _, _, guide := hintIcons()
+	_, upDown, _, a, b, x, y, _, _, guide := hintIcons()
 
 	var stack float32
 	if state.CoreRunning {
@@ -244,6 +255,7 @@ func (s *sceneHistory) drawHintBar() {
 	stackHint(&stack, upDown, "NAVIGATE", h)
 	stackHint(&stack, b, "BACK", h)
 	stackHint(&stack, a, "RUN", h)
+	stackHint(&stack, y, "NETPLAY", h)
 
 	list := menu.stack[len(menu.stack)-1].Entry()
 	if list.children[list.ptr].callbackX != nil {

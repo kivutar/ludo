@@ -83,6 +83,14 @@ func (m *Menu) Render(dt float32) {
 	m.stack[currentScreenIndex].drawHintBar()
 }
 
+// RenderPause renders a transparent black background during netplay pause
+func (m *Menu) RenderPause() {
+	w, h := menu.GetFramebufferSize()
+	if state.Paused {
+		menu.DrawRect(0, 0, float32(w), float32(h), 0, bgColor.Alpha(0.85))
+	}
+}
+
 // ContextReset uploads the UI images to the GPU.
 // It should be called after each time the window is recreated.
 func (m *Menu) ContextReset() {

@@ -20,6 +20,7 @@ type entry struct {
 	tagAlpha        float32
 	subLabelAlpha   float32
 	callbackOK      func() // callback executed when user presses OK
+	callbackSpecial func() // callback executed when user presses Special
 	callbackX       func() // callback executed when user presses X
 	value           func() interface{}
 	stringValue     func() string

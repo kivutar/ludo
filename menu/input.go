@@ -4,6 +4,7 @@ import (
 	"github.com/libretro/ludo/audio"
 	"github.com/libretro/ludo/input"
 	"github.com/libretro/ludo/libretro"
+	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/settings"
 	"github.com/libretro/ludo/state"
@@ -93,6 +94,14 @@ func genericInput(list *entry, dt float32) {
 		}
 	}
 
+	// Special
+	if input.Released[0][libretro.DeviceIDJoypadY] == 1 {
+		if list.children[list.ptr].callbackSpecial != nil {
+			audio.PlayEffect(audio.Effects["ok"])
+			list.children[list.ptr].callbackSpecial()
+		}
+	}
+
 	// X
 	if input.Released[0][libretro.DeviceIDJoypadX] == 1 {
 		if list.children[list.ptr].callbackX != nil {
@@ -158,6 +167,8 @@ func indexed(list *entry, offset int) int {
 	return 0
 }
 
+var combo1, combo2 int
+
 // ProcessHotkeys checks if certain keys are pressed and perform corresponding actions
 func (m *Menu) ProcessHotkeys() {
 	// Disable all hot keys on the exit dialog
@@ -166,17 +177,34 @@ func (m *Menu) ProcessHotkeys() {
 		return
 	}
 
-	// Toggle the menu if ActionMenuToggle or the combo L3+R3 is pressed
-	combo := input.NewState[0][libretro.DeviceIDJoypadL3] == 1 && input.Pressed[0][libretro.DeviceIDJoypadR3] == 1
-	combo = combo || input.Pressed[0][libretro.DeviceIDJoypadL3] == 1 && input.NewState[0][libretro.DeviceIDJoypadR3] == 1
+	// First menu combo
+	if input.NewState[0][libretro.DeviceIDJoypadL3] == 1 && input.NewState[0][libretro.DeviceIDJoypadR3] == 1 {
+		combo1++
+	} else {
+		combo1 = 0
+	}
 
-	if (input.Pressed[0][input.ActionMenuToggle] == 1 || combo) && state.CoreRunning {
+	// Second menu combo
+	if input.NewState[0][libretro.DeviceIDJoypadStart] == 1 && input.NewState[0][libretro.DeviceIDJoypadSelect] == 1 {
+		combo2++
+	} else {
+		combo2 = 0
+	}
+
+	// Toggle the menu if ActionMenuToggle or the combo L3+R3 is pressed
+	if (input.Pressed[0][input.ActionMenuToggle] == 1 || combo1 == 1 || combo2 == 1) && state.CoreRunning {
 		state.MenuActive = !state.MenuActive
 		state.FastForward = false
 		if state.MenuActive {
 			audio.PlayEffect(audio.Effects["notice"])
+			if state.Netplay {
+				netplay.SendPause()
+			}
 		} else {
 			audio.PlayEffect(audio.Effects["notice_back"])
+			if state.Netplay {
+				netplay.SendResume()
+			}
 		}
 	}
 

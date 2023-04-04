@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/libretro/ludo/input"
+	ntf "github.com/libretro/ludo/notifications"
+	"github.com/libretro/ludo/state"
 )
 
 const inputDelayFrames = 3
@@ -21,17 +23,12 @@ const (
 	MsgCodePing        = byte(3) // Used to tracking packet round trip time. Expect a "Pong" back.
 	MsgCodePong        = byte(4) // Sent in reply to a Ping message for testing round trip time.
 	MsgCodeSync        = byte(5) // Used to pass sync data
+	MsgCodeQuit        = byte(6)
+	MsgCodePause       = byte(7)
+	MsgCodeResume      = byte(8)
 )
 
-// Listen is used by the netplay host, listening address and port
-var Listen bool
-
-// Join is used by the netplay guest, address of the host
-var Join bool
-
-// Conn is the connection between two players
-var Conn *net.UDPConn
-
+var conn *net.UDPConn // conn is the connection between two players
 var connectedToClient = false
 var confirmedTick = int64(0)
 var localSyncData = uint32(0)
@@ -43,77 +40,28 @@ var localTickDelta = int64(0)
 var remoteTickDelta = int64(0)
 var localInputHistory = [historySize]uint32{}
 var remoteInputHistory = [historySize]uint32{}
-var clientAddr net.Addr
+var localAddr *net.UDPAddr
+var remoteAddr net.Addr
 var lastSyncedTick = int64(-1)
 var messages chan []byte
 var inputPoll, gameUpdate func()
+var romCRC uint32
 
 // Init initialises a netplay session between two players
-func Init(pollCb, updateCb func()) {
+func Init(gamePath string, pollCb, updateCb func()) {
+	state.Tick = 0
+	romCRC = getROMCRC(gamePath)
 	inputPoll = pollCb
 	gameUpdate = updateCb
+	messages = make(chan []byte, 256)
 
-	if Listen { // Host mode
-		var err error
-		Conn, err = net.ListenUDP("udp", &net.UDPAddr{
-			IP:   net.ParseIP("0.0.0.0"),
-			Port: 1234,
-		})
-		if err != nil {
-			log.Println("Netplay", err.Error())
-			return
+	go func() {
+		if err := UDPHolePunching(); err != nil {
+			ntf.DisplayAndLog(ntf.Error, "Netplay", err.Error())
 		}
+	}()
 
-		Conn.SetReadBuffer(1048576)
-
-		input.LocalPlayerPort = 0
-		input.RemotePlayerPort = 1
-
-		log.Println("Netplay", "Listening.")
-
-		buffer := make([]byte, 1024)
-		_, addr, _ := Conn.ReadFrom(buffer)
-
-		connectedToClient = true
-		clientAddr = addr
-
-		sendPacket(makeHandshakePacket(), 5)
-
-		messages = make(chan []byte, 256)
-		go listen()
-	} else if Join { // Guest mode
-		var err error
-		Conn, err = net.ListenUDP("udp", &net.UDPAddr{
-			IP:   net.ParseIP("0.0.0.0"),
-			Port: 1235,
-		})
-		if err != nil {
-			log.Println("Netplay", err.Error())
-			return
-		}
-
-		clientAddr = &net.UDPAddr{
-			IP:   net.ParseIP("127.0.0.1"),
-			Port: 1234,
-		}
-
-		Conn.SetReadBuffer(1048576)
-
-		input.LocalPlayerPort = 1
-		input.RemotePlayerPort = 0
-
-		log.Println("sending handshake")
-		sendPacket(makeHandshakePacket(), 5)
-
-		buffer := make([]byte, 1024)
-		_, addr, _ := Conn.ReadFrom(buffer)
-
-		connectedToClient = true
-		clientAddr = addr
-
-		messages = make(chan []byte, 256)
-		go listen()
-	}
+	go listen()
 }
 
 // Get input from the remote player for the passed in game tick.
@@ -137,9 +85,6 @@ func sendInputData(tick int64) {
 	if !connectedToClient {
 		return
 	}
-
-	//log.Println("Send input packet", tick)
-
 	sendPacket(makeInputPacket(tick), 1)
 }
 
@@ -165,19 +110,23 @@ func sendPacket(packet []byte, duplicates int) {
 
 // Send a packet immediately
 func sendPacketRaw(packet []byte) {
-	_, err := Conn.WriteTo(packet, clientAddr)
+	_, err := conn.WriteTo(packet, remoteAddr)
 	if err != nil {
 		log.Println(err)
 	}
 }
 
+// Listen on the UDP connection
 func listen() {
 	for {
+		if conn == nil {
+			continue
+		}
 		buffer := make([]byte, 1024)
-		n, err := Conn.Read(buffer)
+		n, err := conn.Read(buffer)
 		if err != nil {
 			log.Println(err)
-			continue
+			return
 		}
 		messages <- buffer[:n]
 	}
@@ -193,7 +142,13 @@ func receiveData() {
 			var code byte
 			binary.Read(r, binary.LittleEndian, &code)
 
-			if code == MsgCodePlayerInput {
+			switch code {
+			case MsgCodeHandshake:
+				if !connectedToClient {
+					ntf.DisplayAndLog(ntf.Success, "Netplay", "Connected")
+					connectedToClient = true
+				}
+			case MsgCodePlayerInput:
 				// Break apart the packet into its parts.
 				var tickDelta, receivedTick int64
 				binary.Read(r, binary.LittleEndian, &tickDelta)
@@ -212,24 +167,21 @@ func receiveData() {
 
 					confirmedTick = receivedTick
 
-					// log.Println("----")
-					// log.Println(confirmedTick)
 					for offset := int64(sendHistorySize - 1); offset >= 0; offset-- {
 						var encodedInput uint32
 						binary.Read(r, binary.LittleEndian, &encodedInput)
 						// Save the input history sent in the packet.
 						setRemoteEncodedInput(encodedInput, receivedTick-offset)
-						// log.Println(encodedInput, receivedTick-offset, offset)
 					}
 				}
-			} else if code == MsgCodePing {
+			case MsgCodePing:
 				var pingTime int64
 				binary.Read(r, binary.LittleEndian, &pingTime)
 				sendPacket(makePongPacket(time.Unix(pingTime, 0)), 1)
-			} else if code == MsgCodePong {
+			case MsgCodePong:
 				var pongTime int64
 				binary.Read(r, binary.LittleEndian, &pongTime)
-			} else if code == MsgCodeSync {
+			case MsgCodeSync:
 				var tick int64
 				var syncData uint32
 				binary.Read(r, binary.LittleEndian, &tick)
@@ -242,6 +194,27 @@ func receiveData() {
 					// Check for a desync
 					isDesynced()
 				}
+			case MsgCodeQuit:
+				if !connectedToClient {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player left")
+				conn.Close()
+				state.Netplay = false
+				connectedToClient = false
+				state.Paused = false
+			case MsgCodePause:
+				if state.Paused {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player paused the session")
+				state.Paused = true
+			case MsgCodeResume:
+				if !state.Paused {
+					return
+				}
+				ntf.DisplayAndLog(ntf.Info, "Netplay", "The other player resumed the session")
+				state.Paused = false
 			}
 		default:
 			return
@@ -257,11 +230,9 @@ func makeInputPacket(tick int64) []byte {
 	binary.Write(buf, binary.LittleEndian, tick)
 
 	historyIndexStart := tick - sendHistorySize + 1
-	// log.Println("Make input", tick, historyIndexStart)
 	for i := int64(0); i < sendHistorySize; i++ {
 		encodedInput := localInputHistory[(historySize+historyIndexStart+i)%historySize]
 		binary.Write(buf, binary.LittleEndian, encodedInput)
-		// log.Println((historySize + historyIndexStart + i) % historySize)
 	}
 
 	return buf.Bytes()
@@ -307,6 +278,39 @@ func makeHandshakePacket() []byte {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, MsgCodeHandshake)
 	return buf.Bytes()
+}
+
+func makeQuitPacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeQuit)
+	return buf.Bytes()
+}
+
+// SendQuit notifies the pair that we closed the game
+func SendQuit() {
+	sendPacket(makeQuitPacket(), 5)
+}
+
+func makePausePacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodePause)
+	return buf.Bytes()
+}
+
+// SendPause notifies the pair that we closed the game
+func SendPause() {
+	sendPacket(makePausePacket(), 5)
+}
+
+func makeResumePacket() []byte {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, MsgCodeResume)
+	return buf.Bytes()
+}
+
+// SendResume notifies the pair that we closed the game
+func SendResume() {
+	sendPacket(makeResumePacket(), 5)
 }
 
 // Encodes the player input state into a compact form for network transmission.

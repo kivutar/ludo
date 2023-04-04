@@ -8,7 +8,7 @@ import (
 	"github.com/libretro/ludo/state"
 )
 
-const detectDesyncs = true
+const detectDesyncs = false
 const desyncCheckRate = int64(10)
 
 // Gets the sync data to confirm the client game states are in sync

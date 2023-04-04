@@ -34,8 +34,14 @@ var LudOS bool
 // FastForward will run the core as fast as possible
 var FastForward bool
 
-// Tick is the current frame, used for rollback networking
+// Tick is the frame counter used for netplay
 var Tick int64
 
-// ForcePause is used to debug rollback networking
+// ForcePause is used to debug netplay
 var ForcePause bool
+
+// Netplay is true when netplay is active
+var Netplay bool
+
+// Paused is true when netplay is paused
+var Paused bool

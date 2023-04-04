@@ -1,6 +1,9 @@
 package menu
 
 import (
+	"github.com/libretro/ludo/audio"
+	"github.com/libretro/ludo/core"
+	"github.com/libretro/ludo/netplay"
 	ntf "github.com/libretro/ludo/notifications"
 	"github.com/libretro/ludo/state"
 	"github.com/libretro/ludo/utils"
@@ -30,6 +33,20 @@ func buildQuickMenu() Scene {
 			state.Core.Reset()
 			state.MenuActive = false
 			state.FastForward = false
+		},
+	})
+
+	list.children = append(list.children, entry{
+		label: "Close",
+		icon:  "close",
+		callbackOK: func() {
+			if state.Netplay {
+				netplay.SendQuit()
+			}
+			core.Unload()
+			audio.PlayEffect(audio.Effects["cancel"])
+			menu.stack[len(menu.stack)-2].segueBack()
+			menu.stack = menu.stack[:len(menu.stack)-1]
 		},
 	})
 
@@ -67,11 +84,11 @@ func buildQuickMenu() Scene {
 
 	if state.Core != nil && state.Core.DiskControlCallback != nil {
 		list.children = append(list.children, entry{
-			label: "Disc Control",
+			label: "Disk Control",
 			icon:  "core-disk-options",
 			callbackOK: func() {
 				list.segueNext()
-				menu.Push(buildCoreDiscControl())
+				menu.Push(buildCoreDiskControl())
 			},
 		})
 	}
