@@ -127,7 +127,7 @@ func makeJoinPacket() []byte {
 // UDPHolePunching attempt to traverse the NAT
 func UDPHolePunching() error {
 	rdv, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.ParseIP("127.0.0.1"),
+		IP:   net.ParseIP("13.50.239.171"),
 		Port: 1234,
 	})
 	if err != nil {
